@@ -1,0 +1,5 @@
+  # Publish all joint states -----------------------------------
+scan_pro_robot:
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 50
