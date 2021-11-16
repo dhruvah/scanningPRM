@@ -1,0 +1,49 @@
+<launch>
+  <!-- the "sim" argument controls whether we connect to a Simulated or Real robot -->
+  <!--  - if sim=false, a ip_address argument is required -->
+  <arg name="sim" default="true" />
+  <arg name="ip_address" default="169.254.39.16" />
+
+  <!-- If you want to change send and recieve format of denso_robot_control, -->
+  <!-- you can specify the send_format and recv_format parameters -->
+  <arg name="send_format" default="288" />
+  <arg name="recv_format" default="292" />
+  <arg name="config_name" default="$(find denso_robot_bringup)/rviz/default.rviz"/>
+  <arg name="robot_name" value="vs6577"/>
+  <arg name="xacro" default="true"/>
+  <arg name="sensor" default="none"/>
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+    <param name="use_gui" value="false"/>
+    <param name="publish_frequency" type="double" value="125.0" />
+    <rosparam param="source_list" subst_value = "true">[/$(arg robot_name)/joint_states]</rosparam>
+  </node>
+
+  <!-- run the "real robot" interface nodes -->
+  <!--   - this typically includes: robot_state, motion_interface, and joint_trajectory_action nodes -->
+  <!--   - replace these calls with appropriate robot-specific calls or launch files -->
+  <arg name="world_path" default="$(find denso_robot_gazebo)/worlds/denso_robot.world"/>
+  <arg name="x" default="0"/>
+  <arg name="y" default="0"/>
+  <arg name="z" default="0"/>
+  <group if="$(arg sim)">
+    <include file="$(find vs6577_moveit_config)/launch/move_group.launch">
+      <arg name="publish_monitored_planning_scene" value="true" />
+    </include>
+  </group>  
+
+  <group unless="$(arg sim)">
+    <include file="$(find denso_robot_control)/launch/denso_robot_control.launch">
+      <arg name="robot_name" value="$(arg robot_name)" />
+      <arg name="ip_address" value="$(arg ip_address)" />
+      <arg name="send_format" value="$(arg send_format)" />
+      <arg name="recv_format" value="$(arg recv_format)" />
+    </include>
+    <include file="$(find vs6577_moveit_config)/launch/move_group.launch">
+      <arg name="publish_monitored_planning_scene" value="true" />
+    </include>
+  </group>  
+
+  <include file="$(find vs6577_moveit_config)/launch/moveit_rviz.launch">
+  </include>
+</launch>
