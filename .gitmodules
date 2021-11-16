@@ -1,6 +1,0 @@
-[submodule "denso_robot_ros"]
-	path = denso_robot_ros
-	url = https://github.com/DENSORobot/denso_robot_ros.git
-[submodule "planning_ws/src/denso_robot_ros"]
-	path = planning_ws/src/denso_robot_ros
-	url = https://github.com/DENSORobot/denso_robot_ros.git
