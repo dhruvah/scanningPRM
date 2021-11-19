@@ -33,6 +33,7 @@ double randomAngleGen() {
 		srand(time(NULL));
 		init = true;
         //hello
+        // goodbye
 	}
 	randAngle = ((double)rand() / RAND_MAX) * 2 * PI; //generates random double between 0 and 2*PI
 	return (randAngle);
