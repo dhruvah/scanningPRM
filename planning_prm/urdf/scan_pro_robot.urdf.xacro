@@ -5,7 +5,7 @@
 
 	<gazebo>
         <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
-            <robotNamespace>/</robotNamespace>
+            <robotNamespace>/scan_pro_robot</robotNamespace>
 			<controlPeriod>0.001</controlPeriod>
 			<legacyModeNS>false</legacyModeNS>
         </plugin>
