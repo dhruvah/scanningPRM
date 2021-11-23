@@ -13,6 +13,11 @@ scan_pro_robot:
         - joint_4
         - joint_5
         - joint_6
+
+  turntable_controller:
+      type: "position_controllers/JointTrajectoryController"
+      joints:
+        - turntable_revolve_joint
       # constraints:
         # goal_time: 0.6
         # stopped_velocity_tolerance: 0.05
