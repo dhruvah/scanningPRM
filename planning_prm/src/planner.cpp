@@ -15,6 +15,16 @@
 
 using namespace std;
 
+double euclidDist(double *v1, double *v2, int numofDOFs)
+{
+	double result = 0;
+	for (int i = 0; i < numofDOFs; i++)
+	{
+		result += (v1[i] - v2[i])*(v1[i] - v2[i]);
+	}
+	return sqrt(result);
+}
+
 struct Node {
 	int id;
 	int comdId;
@@ -32,8 +42,6 @@ double randomAngleGen() {
 	{
 		srand(time(NULL));
 		init = true;
-        //hello
-        // goodbye
 	}
 	randAngle = ((double)rand() / RAND_MAX) * 2 * PI; //generates random double between 0 and 2*PI
 	return (randAngle);
@@ -68,7 +76,7 @@ int main() {
     int numDOFs = 6;
     double s[numDOFs];
     for (int i = 0; i < 10; i++){
-        randomSample(s, numDOFs, 0, 0, 0);
+        randomSample(s, numDOFs, 0, 0, 0);	// need to add inputs necessary for collision check inside randomSample
         printAngles(s, numDOFs);
     }
     return 0;
