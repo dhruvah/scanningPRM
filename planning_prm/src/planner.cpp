@@ -175,7 +175,8 @@ void printNumComponents(unordered_map<int, vector<int>*> &components) {
 	cout << "num of components: " << numComponents << endl;
 }
 
-void plannerPRM(int numOfDOFS) {
+void plannerPRM(int numOfDOFS, double *startAngles, double *goalAngles) {
+	// pre-processing
 	unordered_map<int, Node*> vertices;
 	unordered_map<int, vector<int>*> components;
 	Node *q;
@@ -193,20 +194,26 @@ void plannerPRM(int numOfDOFS) {
 		q = integrate_with_graph(s, vertices, components, maxNeighbors, idx++, epsilon, numOfDOFS, 0, 0, 0);   // need to add inputs necessary for collision check
 		numVertices++;
 	}
+
+	// query
+	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, idx, epsilon, numOfDOFS, 0, 0, 0);
+	Node *qStart = integrate_with_graph(startAngles, vertices, components, maxNeighbors, ++idx, epsilon, numOfDOFS, 0, 0, 0);
+	numVertices+=2;
+
+	cout << "num of vertices: " << numVertices << endl;
 	printNumComponents(components);
 
-	deletePointers(vertices);
+	cout << "goal comp id: " << qGoal->comdId << endl <<  "start comp id: " << qStart->comdId << endl;
+
+	deletePointers(vertices);  // double check this to make sure all pointers deleted
 }
 
 int main() {
 	clock_t startTime = clock();
     int numDOFs = 5;
-	plannerPRM(numDOFs);
-    // double s[numDOFs];
-    // for (int i = 0; i < 10; i++){
-    //     randomSample(s, numDOFs, 0, 0, 0);	// need to add inputs necessary for collision check inside randomSample
-    //     printAngles(s, numDOFs);
-    // }
+	double qStart[numDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
+	double qGoal[numDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
+	plannerPRM(numDOFs, qStart, qGoal);
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
     return 0;
 }
