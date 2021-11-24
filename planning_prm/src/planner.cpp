@@ -21,6 +21,7 @@ double euclidDist(double *v1, double *v2, int numOfDOFs)
 	for (int i = 0; i < numOfDOFs; i++)
 	{
 		result += (v1[i] - v2[i])*(v1[i] - v2[i]);
+		// test push
 	}
 	return sqrt(result);
 }
