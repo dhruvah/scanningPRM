@@ -21,16 +21,15 @@ double euclidDist(double *v1, double *v2, int numOfDOFs)
 	for (int i = 0; i < numOfDOFs; i++)
 	{
 		result += (v1[i] - v2[i])*(v1[i] - v2[i]);
-		// test push
 	}
 	return sqrt(result);
 }
 
 struct Node {
 	int id;
-	int comdId;
+	int compId;
 	double *angles;
-	vector<int>* neighbors;
+	vector<int> neighbors;
 	double f;
 	double g;
 	Node *parent;
@@ -38,16 +37,15 @@ struct Node {
 	Node(int idIn, int compIdIn, double *anglesIn)
 	{
 		this->id = idIn;
-		this->comdId = compIdIn;
+		this->compId = compIdIn;
 		this->angles = anglesIn;
-		this->neighbors = new vector<int>();
-		this->g = INT16_MAX;
+		this->g = INT_MAX;
 	}
 
 	void addEdge(Node *n)
 	{
-		this->neighbors->push_back(n->id);
-		n->neighbors->push_back(this->id);
+		this->neighbors.push_back(n->id);
+		n->neighbors.push_back(this->id);
 	}
 
 	bool setAstarParams(Node *newParent, double *goalAngles, int numOfDOFs)
@@ -61,6 +59,13 @@ struct Node {
 			return true;
 		}
 		return false;
+	}
+
+	void resetAstarParams()
+	{
+		this->f = 0;
+		this->g = INT_MAX;
+		this->parent = 0;
 	}
 
 };
@@ -107,22 +112,21 @@ void printAngles(double *angles, int size) {
     cout << temp;
 }
 
-void update_component_ids(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>*> &components, int oldId, int newId)
+void update_component_ids(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int oldId, int newId)
 {
-	for (int id : *(components[oldId]))
+	for (int id : components[oldId])
 	{
-		vertices[id]->comdId = newId;
-		components[newId]->push_back(id);
+		vertices[id]->compId = newId;
+		components[newId].push_back(id);
 	}
-	components[oldId]->clear();
+	components[oldId].clear();
 }
 
-Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>*> &components, int maxNeighbors, int idx, double epsilon, int numOfDOFs, double *map, int xSize, int ySize)
+Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int maxNeighbors, int idx, double epsilon, int numOfDOFs, double *map, int xSize, int ySize)
 {
 	Node *q = new Node(idx, idx, angles);
 	vertices[idx] = q;
-	components[idx] = new vector<int>();
-	components[idx]->push_back(q->id); 
+	components[idx].push_back(q->id); 
 	int newId;
 	double dist;
 
@@ -135,15 +139,15 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 		dist = euclidDist(angles, it.second->angles, numOfDOFs);
 		if (dist < epsilon)
 		{
-			if (q->neighbors->size() <= maxNeighbors)  // could also be (q->comp_id != it.second->comp_id) if only connecting components once (this was a problem before though)
+			if (q->neighbors.size() <= maxNeighbors)  // could also be (q->comp_id != it.second->comp_id) if only connecting components once (this was a problem before though)
 			{
 				if (true)	// need to implement obstacleFree function here (interpolate and check for collisions between configs)
 				{
-					newId = it.second->comdId;
+					newId = it.second->compId;
 					q->addEdge(it.second);
-					if (q->comdId != it.second->comdId)
+					if (q->compId != it.second->compId)
 					{
-						update_component_ids(vertices, components, q->comdId, newId);
+						update_component_ids(vertices, components, q->compId, newId);
 					}
 				}
 			}
@@ -152,23 +156,32 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 	return q;
 }
 
+void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
+{
+	for (int id : n->neighbors)
+	{
+		vertices[id]->neighbors.pop_back();
+	}
+	vertices.erase(n->id);
+	components[n->compId].pop_back();
+	delete n;
+}
+
 void deletePointers(unordered_map<int, Node*> &vertices) {
 	Node *q;
 	double *a;
-	vector<int>* v;
 	for (auto& kv: vertices) {
 		q = kv.second;
 		a = q->angles;
-		v = q->neighbors;
-		delete q, a, v;
+		delete q, a;
 	}
 }
 
-void printNumComponents(unordered_map<int, vector<int>*> &components) {
+void printNumComponents(unordered_map<int, vector<int>> &components) {
 	int numComponents = 0;
 	for (auto& it : components)
 	{
-		if (!it.second->empty())
+		if (!it.second.empty())
 		{
 			numComponents++;
 		}
@@ -176,37 +189,77 @@ void printNumComponents(unordered_map<int, vector<int>*> &components) {
 	cout << "num of components: " << numComponents << endl;
 }
 
-void plannerPRM(int numOfDOFS, double *startAngles, double *goalAngles) {
-	// pre-processing
-	unordered_map<int, Node*> vertices;
-	unordered_map<int, vector<int>*> components;
-	Node *q;
-	int idx = 0;
-	double epsilon = 1;
-	int tf = 5;
-	int K = 10000;
-	int maxNeighbors = 5;
-	int numVertices = 0;
-	// while (((double)(clock() - clock_start) / CLOCKS_PER_SEC) < tf)
-	for (int k = 0; k < K; k++)
+void clearOldData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
+{
+	vertices.clear();
+	components.clear();
+}
+
+void resetNodeAstarParams(unordered_map<int, Node*> &vertices)
+{
+	for (auto &it : vertices)
 	{
-		double *s = new double[numOfDOFS];
-		randomSample(s, numOfDOFS, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
-		q = integrate_with_graph(s, vertices, components, maxNeighbors, idx++, epsilon, numOfDOFS, 0, 0, 0);   // need to add inputs necessary for collision check
-		numVertices++;
+		it.second->resetAstarParams();
+	}
+}
+
+void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, int numOfDOFs)
+{
+	cout << "finding optimal path...\n";
+}
+
+void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles) {
+	static unordered_map<int, Node*> vertices;
+	static unordered_map<int, vector<int>> components;
+	static bool mapGenerated;
+	static int numVertices = 0;
+	static int maxNeighbors = 10;
+	static int epsilon = 2;
+
+	if (!mapGenerated) {
+		// pre-processing
+		mapGenerated = true;
+		deletePointers(vertices);
+		clearOldData(vertices, components);
+
+		Node *q;
+		int tf = 5;
+		int K = 20000;
+		clock_t prmStartTime = clock();
+		while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < tf)
+		// for (int k = 0; k < K; k++)
+		{
+			double *s = new double[numOfDOFs];
+			randomSample(s, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
+			q = integrate_with_graph(s, vertices, components, maxNeighbors, numVertices++, epsilon, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check
+		}
 	}
 
 	// query
-	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, idx, epsilon, numOfDOFS, 0, 0, 0);
-	Node *qStart = integrate_with_graph(startAngles, vertices, components, maxNeighbors, ++idx, epsilon, numOfDOFS, 0, 0, 0);
-	numVertices+=2;
+	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
+	Node *qStart = integrate_with_graph(startAngles, vertices, components, maxNeighbors, ++numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
 
 	cout << "num of vertices: " << numVertices << endl;
 	printNumComponents(components);
 
-	cout << "goal comp id: " << qGoal->comdId << endl <<  "start comp id: " << qStart->comdId << endl;
+	cout << "goal comp id: " << qGoal->compId << endl <<  "start comp id: " << qStart->compId << endl;
 
-	deletePointers(vertices);  // double check this to make sure all pointers deleted
+	if (qGoal->compId == qStart->compId)
+	{
+		aStarSearch(vertices, qStart, qGoal, numOfDOFs);
+	}
+	else
+	{
+		cout << "no viable path exists\n";
+	}
+
+	removeFromGraph(qGoal, vertices, components);
+	removeFromGraph(qStart, vertices, components);
+	resetNodeAstarParams(vertices);
+	qGoal, qStart = nullptr;
+	numVertices -= 2;
+
+	// deletePointers(vertices);  // double check this to make sure all pointers deleted
 }
 
 int main() {
