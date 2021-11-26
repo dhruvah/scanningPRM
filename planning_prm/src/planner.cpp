@@ -7,6 +7,7 @@
 #include <random>
 #include <time.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <queue>
 #include <stack>
 #include <iostream>
@@ -14,6 +15,18 @@
 #define PI 3.141592654
 
 using namespace std;
+
+// need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
+// will need to save data elsewhere in that case
+struct Node;
+static unordered_map<int, Node*> vertices;
+static unordered_map<int, vector<int>> components;
+static bool mapGenerated;
+static int numVertices = 0;
+static int maxNeighbors = 10;
+static int epsilon = 2;
+static double i_step = 0.05;
+
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
 {
@@ -70,7 +83,7 @@ struct Node {
 
 };
 
-struct nodeCompare
+struct NodeCompare
 {
     bool operator()(Node *n1, Node *n2)
     {
@@ -203,19 +216,104 @@ void resetNodeAstarParams(unordered_map<int, Node*> &vertices)
 	}
 }
 
-void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, int numOfDOFs)
-{
-	cout << "finding optimal path...\n";
+void printPlan(double **&plan, int planLength, int numOfDOFs) {
+	if (plan == 0){
+		return;
+	}
+
+	for (int i = 0; i < planLength; i++) {
+		printAngles(plan[i], numOfDOFs);
+	}
+	cout << "Plan Length: " << planLength << endl;
 }
 
-void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles) {
-	static unordered_map<int, Node*> vertices;
-	static unordered_map<int, vector<int>> components;
-	static bool mapGenerated;
-	static int numVertices = 0;
-	static int maxNeighbors = 10;
-	static int epsilon = 2;
+void backtrackPRM(Node *goal, int numOfDOFs, double **&plan, int &planLength)
+{
+	cout << "Plan euclidean distance: " << goal->g << endl;
+	Node *temp = goal;
+	int numSteps;
+	stack<double*> path;
+	while (temp->parent != 0)
+	{
+		numSteps = (int)(euclidDist(temp->angles, temp->parent->angles, numOfDOFs) / i_step);
+		numSteps = (numSteps > 0) ? numSteps : 1;
+		for (int step = 0; step < numSteps; step++)
+		{
+			double *newAngles = new double[numOfDOFs];
+			for (int i = 0; i < numOfDOFs; i++)
+			{
+				newAngles[i] = temp->angles[i] + (temp->parent->angles[i] - temp->angles[i]) * ((double)step / (double)numSteps);
+			}
+			path.push(newAngles);
+		}
+		temp = temp->parent;
+	}
+	path.push(temp->angles); // start angles
+	planLength = path.size();
+	plan = (double **)malloc(planLength * sizeof(double *));
+	for (int j = 0; j < planLength; j++)
+	{
+		plan[j] = (double *)malloc(numOfDOFs * sizeof(double));
+		plan[j] = path.top();
+		path.pop();
+	}
+}
 
+void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, int numOfDOFs, double **&plan, int &planLength)
+{
+	cout << "finding optimal path...\n";
+	priority_queue<Node *, vector<Node *>, NodeCompare> OPEN;
+    unordered_set<int> CLOSED;
+	OPEN.push(start);
+	start->g = 0;
+	start->f = 0;
+	start->parent = 0;
+	int index;
+	bool goalFound = false;
+	double distBetween;
+	Node *best;
+	Node *child;
+	while (!OPEN.empty())
+	{
+		best = OPEN.top();
+		OPEN.pop();
+		index = best->id; 
+		if (CLOSED.count(index))
+		{
+			continue;
+		}
+		CLOSED.insert(index);
+		// check if goal
+		if (best == goal)
+		{
+			goalFound = true;
+			break;
+		}
+		for (int id : best->neighbors)
+		{
+			if (!CLOSED.count(id))
+			{
+				child = vertices[id];
+				distBetween = euclidDist(best->angles, child->angles, numOfDOFs);
+				if (child->setAstarParams(best, goal->angles, numOfDOFs))
+				{
+					OPEN.push(child);
+				}
+			}
+		}
+	}
+	if (goalFound)
+	{
+		cout << "Path found\n";
+		backtrackPRM(best, numOfDOFs, plan, planLength);
+	}
+	else
+	{
+		cout << "No possible path\n";
+	}
+}
+
+void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength) {
 	if (!mapGenerated) {
 		// pre-processing
 		mapGenerated = true;
@@ -226,8 +324,8 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles) {
 		int tf = 5;
 		int K = 20000;
 		clock_t prmStartTime = clock();
-		while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < tf)
-		// for (int k = 0; k < K; k++)
+		// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < tf)
+		for (int k = 0; k < K; k++)
 		{
 			double *s = new double[numOfDOFs];
 			randomSample(s, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
@@ -238,6 +336,7 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles) {
 	// query
 	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
 	Node *qStart = integrate_with_graph(startAngles, vertices, components, maxNeighbors, ++numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
+	numVertices++;
 
 	cout << "num of vertices: " << numVertices << endl;
 	printNumComponents(components);
@@ -246,7 +345,7 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles) {
 
 	if (qGoal->compId == qStart->compId)
 	{
-		aStarSearch(vertices, qStart, qGoal, numOfDOFs);
+		aStarSearch(vertices, qStart, qGoal, numOfDOFs, plan, planLength);
 	}
 	else
 	{
@@ -260,14 +359,21 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles) {
 	numVertices -= 2;
 
 	// deletePointers(vertices);  // double check this to make sure all pointers deleted
+	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
 }
 
 int main() {
 	clock_t startTime = clock();
-    int numDOFs = 5;
-	double qStart[numDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
-	double qGoal[numDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
-	plannerPRM(numDOFs, qStart, qGoal);
+    int numOfDOFs = 5;
+	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
+	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
+	double **plan = 0;
+	int planLength;
+
+	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	printPlan(plan, planLength, numOfDOFs);
+
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
+
     return 0;
 }
