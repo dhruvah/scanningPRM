@@ -18,7 +18,13 @@
 #include <moveit_msgs/RobotState.h>
 #include <moveit_msgs/RobotTrajectory.h>
 #include <moveit_msgs/GetStateValidity.h>
+#include <moveit_msgs/GetStateValidityRequest.h>
+#include <moveit_msgs/GetStateValidityResponse.h>
 #include <tf/tf.h>
+
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/robot_model_loader/robot_model_loader.h>
+#include <moveit/planning_scene/planning_scene.h>
 
 #include <sensor_msgs/JointState.h>
 #include <trajectory_msgs/JointTrajectory.h>
@@ -375,16 +381,16 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
 }
 
-void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
-{
-    string temp = "[";
-    for (double a : js->position) {
-        temp += to_string(a) + ", ";
-    }
-    temp = temp.substr(0, temp.length() - 2) + "]";
-    ROS_INFO("I heard: %s", temp);
-	// ROS_ERROR("I heard");
-}
+// void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
+// {
+//     string temp = "[";
+//     for (double a : js->position) {
+//         temp += to_string(a) + ", ";
+//     }
+//     temp = temp.substr(0, temp.length() - 2) + "]";
+//     ROS_INFO("I heard: %s", temp);
+// 	// ROS_ERROR("I heard");
+// }
 
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
@@ -400,38 +406,71 @@ int main(int argc, char **argv) {
 
     ros::init(argc, argv, "talker");
     ros::NodeHandle n;
-	sensor_msgs::JointState js;
-	trajectory_msgs::JointTrajectory jt;
-	// ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
-	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
+	
+	// static const std::string PLANNING_GROUP = "arm";
 
-	vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-	moveit_msgs::RobotState scanpro_robot_state;
-	moveit_msgs::GetStateValidity isValid;
-	scanpro_robot_state.joint_state.position = q_check;
-	// ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
-	isValid.request.robot_state = scanpro_robot_state;
-	cout << "Checking validity: " << isValid.response << endl;
+	// // The :move_group_interface:`MoveGroupInterface` class can be easily
+	// // setup using just the name of the planning group you would like to control and plan for.
+	// moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
+	// ROS_INFO_NAMED("tutorial", "Reference frame: %s", move_group.getPlanningFrame().c_str());
+	string j1 = "arm";
 
-	while (ros::ok())
-	{
-		vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
-		// for (int i = 0; i < numOfDOFs; i++) 
-		// {
-		// 	q_test.push_back(plan[0][i]);
-		// }
-		// q_test.push_back(0);
-		// js.position = q_test;
-		jt.points.resize(1);
-		jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
+	vector<double> q_check = {0.5,0.5,3.3,0.5,0.8,1.0};
+
+	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
+	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
+	planning_scene::PlanningScene planning_scene(kinematic_model);
+
+	collision_detection::CollisionRequest collision_request;
+  	collision_detection::CollisionResult collision_result;
+
+	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
+	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
+	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
+	copied_state.setJointGroupPositions(j1, q_check);
+
+	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+  	ROS_INFO_STREAM("Test 7: Current state is " << (collision_result.collision ? "in" : "not in") << " self collision");
+
+	// vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
+	// moveit_msgs::RobotState scanpro_robot_state;
+	// moveit_msgs::GetStateValidity isValid;
+	// moveit_msgs::GetStateValidityRequest req;
+	// moveit_msgs::GetStateValidityResponse res;
+	// scanpro_robot_state.joint_state.position = q_check;
+	// // ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
+	// // check_val_service.
+	// isValid.request = req;
+	// // req.group_name = ..............
+	// req.robot_state = scanpro_robot_state;
+	// isValid.response = res;
+
+	// cout << "Checking validity: " << res << endl;
+
+	// sensor_msgs::JointState js;
+	// trajectory_msgs::JointTrajectory jt;
+	// // ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
+	// ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
+
+	// while (ros::ok())
+	// {
+	// 	// vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
+	// 	// for (int i = 0; i < numOfDOFs; i++) 
+	// 	// {
+	// 	// 	q_test.push_back(plan[0][i]);
+	// 	// }
+	// 	// q_test.push_back(0);
+	// 	// js.position = q_test;
+	// 	jt.points.resize(1);
+	// 	jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
 		
-		jt.points[0].positions = {0.5,0.5,0.02,0.5,0.8,1.0};
-		jt.points[0].time_from_start = {1,0};
+	// 	jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
+	// 	jt.points[0].time_from_start = {1,0};
 
-		jt_pub.publish(jt);
+	// 	jt_pub.publish(jt);
 		
-		ros::spinOnce();
-	}
+	// 	ros::spinOnce();
+	// }
 	
     // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
     // ros::spin();    

@@ -10,7 +10,14 @@ project(planning_prm)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  moveit_core 
+  moveit_ros_planning 
+  moveit_ros_planning_interface 
+  moveit_visual_tools
+  geometry_msgs
+  cmake_modules
 )
+find_package(Eigen3 REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -118,6 +125,7 @@ include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
 )
+include_directories(SYSTEM ${EIGEN3_INCLUDE_DIRS})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
