@@ -21,6 +21,7 @@
 #include <tf/tf.h>
 
 #include <sensor_msgs/JointState.h>
+#include <trajectory_msgs/JointTrajectory.h>
 
 #include <std_msgs/String.h>
 
@@ -387,23 +388,44 @@ void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
 
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
-    int numOfDOFs = 5;
-	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
-	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
+    int numOfDOFs = 6;
+	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
+	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
 	double **plan = 0;
 	int planLength;
 
-	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	printPlan(plan, planLength, numOfDOFs);
+	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	// printPlan(plan, planLength, numOfDOFs);
+	// cout << "Should output -> " << plan[0][0] << endl;
 
     ros::init(argc, argv, "talker");
     ros::NodeHandle n;
 	sensor_msgs::JointState js;
-	ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("joint_state", 1);
-	for (int i = 0; i < numOfDOFs; i++) {
-		js.position.push_back(plan[0][i]);
+	trajectory_msgs::JointTrajectory jt;
+	// ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
+	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
+	
+
+	while (ros::ok())
+	{
+		vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
+		// for (int i = 0; i < numOfDOFs; i++) 
+		// {
+		// 	q_test.push_back(plan[0][i]);
+		// }
+		// q_test.push_back(0);
+		// js.position = q_test;
+		jt.points.resize(1);
+		jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
+		
+		jt.points[0].positions = {0.5,0.5,0.02,0.5,0.8,1.0};
+		jt.points[0].time_from_start = {1,0};
+
+		jt_pub.publish(jt);
+		
+		ros::spinOnce();
 	}
-	js_pub.publish(js);
+	
     // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
     // ros::spin();    
 
