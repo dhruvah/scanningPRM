@@ -5,7 +5,13 @@
   <rosparam file="$(find scan_pro_moveit_config)/config/ros_controllers.yaml" command="load"/>
 
   <!-- Load the controllers -->
+  <!-- <node name="arm_controller_spawner" pkg="controller_manager" type="controller_manager" args="spawn arm_controller" respawn="false" output="screen" ns="/scan_pro_robot)"/>
+  <node name="joint_state_controller_spawner" pkg="controller_manager" type="controller_manager" args="spawn joint_state_controller" respawn="false" output="screen"  ns="/scan_pro_robot"/> -->
+
   <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false"
-    output="screen" args="arm_controller turntable_controller "/>
+    ns="/scan_pro_robot" output="screen" 
+    args="--namespace=/scan_pro_robot
+    joint_state_controller
+    arm_controller"/>
 
 </launch>

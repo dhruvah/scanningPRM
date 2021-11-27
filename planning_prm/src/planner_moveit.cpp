@@ -404,7 +404,14 @@ int main(int argc, char **argv) {
 	trajectory_msgs::JointTrajectory jt;
 	// ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
 	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
-	
+
+	vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
+	moveit_msgs::RobotState scanpro_robot_state;
+	moveit_msgs::GetStateValidity isValid;
+	scanpro_robot_state.joint_state.position = q_check;
+	// ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
+	isValid.request.robot_state = scanpro_robot_state;
+	cout << "Checking validity: " << isValid.response << endl;
 
 	while (ros::ok())
 	{
