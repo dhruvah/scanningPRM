@@ -21,6 +21,9 @@
 #include <tf/tf.h>
 
 #include <sensor_msgs/JointState.h>
+#include <trajectory_msgs/JointTrajectory.h>
+
+#include <std_msgs/String.h>
 
 #define PI 3.141592654
 
@@ -374,24 +377,57 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 
 void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
 {
-  ROS_INFO("I heard: [%d]", js->position);
+    string temp = "[";
+    for (double a : js->position) {
+        temp += to_string(a) + ", ";
+    }
+    temp = temp.substr(0, temp.length() - 2) + "]";
+    ROS_INFO("I heard: %s", temp);
+	// ROS_ERROR("I heard");
 }
 
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
-    int numOfDOFs = 5;
-	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
-	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
+    int numOfDOFs = 6;
+	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
+	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
 	double **plan = 0;
 	int planLength;
 
-	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	printPlan(plan, planLength, numOfDOFs);
+	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	// printPlan(plan, planLength, numOfDOFs);
+	// cout << "Should output -> " << plan[0][0] << endl;
 
-    ros::init(argc, argv, "listener");
+    ros::init(argc, argv, "talker");
     ros::NodeHandle n;
-    ros::Subscriber sub = n.subscribe("joint", 1000, jointCallback);
-    ros::spin();    
+	sensor_msgs::JointState js;
+	trajectory_msgs::JointTrajectory jt;
+	// ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
+	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
+	
+
+	while (ros::ok())
+	{
+		vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
+		// for (int i = 0; i < numOfDOFs; i++) 
+		// {
+		// 	q_test.push_back(plan[0][i]);
+		// }
+		// q_test.push_back(0);
+		// js.position = q_test;
+		jt.points.resize(1);
+		jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
+		
+		jt.points[0].positions = {0.5,0.5,0.02,0.5,0.8,1.0};
+		jt.points[0].time_from_start = {1,0};
+
+		jt_pub.publish(jt);
+		
+		ros::spinOnce();
+	}
+	
+    // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
+    // ros::spin();    
 
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 
