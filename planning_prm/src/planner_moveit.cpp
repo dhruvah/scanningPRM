@@ -45,6 +45,7 @@ static int numVertices = 0;
 static int maxNeighbors = 10;
 static int epsilon = 2;
 static double i_step = 0.05;
+string PLANNING_GROUP = "arm";
 
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
@@ -400,10 +401,6 @@ int main(int argc, char **argv) {
 	double **plan = 0;
 	int planLength;
 
-	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	// printPlan(plan, planLength, numOfDOFs);
-	// cout << "Should output -> " << plan[0][0] << endl;
-
     ros::init(argc, argv, "talker");
     ros::NodeHandle n;
 	
@@ -413,10 +410,10 @@ int main(int argc, char **argv) {
 	// // setup using just the name of the planning group you would like to control and plan for.
 	// moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
 	// ROS_INFO_NAMED("tutorial", "Reference frame: %s", move_group.getPlanningFrame().c_str());
-	string j1 = "arm";
+	// string j1 = "arm";
 
-	vector<double> q_check = {0.5,0.5,3.3,0.5,0.8,1.0};
-
+	// vector<double> q_check = {1.66, -0.9, -1.06, -3.14, -1.99, 1.48};
+	vector<double> q_check = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
 	planning_scene::PlanningScene planning_scene(kinematic_model);
@@ -427,10 +424,14 @@ int main(int argc, char **argv) {
 	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
 	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
 	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
-	copied_state.setJointGroupPositions(j1, q_check);
+	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
 	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
-  	ROS_INFO_STREAM("Test 7: Current state is " << (collision_result.collision ? "in" : "not in") << " self collision");
+  	ROS_INFO_STREAM("Test 7: Current state is " << (collision_result.collision ? "in" : "not in") << " collision");
+
+	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	// printPlan(plan, planLength, numOfDOFs);
+	// cout << "Should output -> " << plan[0][0] << endl;
 
 	// vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
 	// moveit_msgs::RobotState scanpro_robot_state;
@@ -448,29 +449,30 @@ int main(int argc, char **argv) {
 	// cout << "Checking validity: " << res << endl;
 
 	// sensor_msgs::JointState js;
-	// trajectory_msgs::JointTrajectory jt;
+	trajectory_msgs::JointTrajectory jt;
 	// // ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
-	// ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
+	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
 
-	// while (ros::ok())
-	// {
-	// 	// vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
-	// 	// for (int i = 0; i < numOfDOFs; i++) 
-	// 	// {
-	// 	// 	q_test.push_back(plan[0][i]);
-	// 	// }
-	// 	// q_test.push_back(0);
-	// 	// js.position = q_test;
-	// 	jt.points.resize(1);
-	// 	jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
+	while (ros::ok())
+	{
+		// vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
+		// for (int i = 0; i < numOfDOFs; i++) 
+		// {
+		// 	q_test.push_back(plan[0][i]);
+		// }
+		// q_test.push_back(0);
+		// js.position = q_test;
+		jt.points.resize(1);
+		jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
 		
-	// 	jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
-	// 	jt.points[0].time_from_start = {1,0};
+		// jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
+		jt.points[0].positions = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
+		jt.points[0].time_from_start = {1,0};
 
-	// 	jt_pub.publish(jt);
+		jt_pub.publish(jt);
 		
-	// 	ros::spinOnce();
-	// }
+		ros::spinOnce();
+	}
 	
     // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
     // ros::spin();    
