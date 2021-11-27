@@ -374,7 +374,12 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 
 void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
 {
-  ROS_INFO("I heard: [%d]", js->position);
+    // string temp = "[";
+    // for (double a : js->position) {
+    //     temp += to_string(a) + ", ";
+    // }
+    // temp = temp.substr(0, temp.length() - 2) + "]";
+    // ROS_INFO("I heard: [%s]", temp);
 }
 
 int main(int argc, char **argv) {
