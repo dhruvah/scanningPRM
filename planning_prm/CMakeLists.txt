@@ -149,6 +149,7 @@ add_executable(planning_prm_node src/planner_moveit.cpp)
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
+target_link_libraries(planning_prm_node ${catkin_LIBRARIES})
 
 #############
 ## Install ##

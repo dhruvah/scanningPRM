@@ -22,6 +22,8 @@
 
 #include <sensor_msgs/JointState.h>
 
+#include <std_msgs/String.h>
+
 #define PI 3.141592654
 
 using namespace std;
@@ -374,12 +376,13 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 
 void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
 {
-    // string temp = "[";
-    // for (double a : js->position) {
-    //     temp += to_string(a) + ", ";
-    // }
-    // temp = temp.substr(0, temp.length() - 2) + "]";
-    // ROS_INFO("I heard: [%s]", temp);
+    string temp = "[";
+    for (double a : js->position) {
+        temp += to_string(a) + ", ";
+    }
+    temp = temp.substr(0, temp.length() - 2) + "]";
+    ROS_INFO("I heard: %s", temp);
+	// ROS_ERROR("I heard");
 }
 
 int main(int argc, char **argv) {
@@ -393,10 +396,16 @@ int main(int argc, char **argv) {
 	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
 	printPlan(plan, planLength, numOfDOFs);
 
-    ros::init(argc, argv, "listener");
+    ros::init(argc, argv, "talker");
     ros::NodeHandle n;
-    ros::Subscriber sub = n.subscribe("joint", 1000, jointCallback);
-    ros::spin();    
+	sensor_msgs::JointState js;
+	ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("joint_state", 1);
+	for (int i = 0; i < numOfDOFs; i++) {
+		js.position.push_back(plan[0][i]);
+	}
+	js_pub.publish(js);
+    // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
+    // ros::spin();    
 
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 
