@@ -12,7 +12,15 @@
 #include <stack>
 #include <iostream>
 
+#include <ros/ros.h>
 
+#include <moveit_msgs/PositionIKRequest.h>
+#include <moveit_msgs/RobotState.h>
+#include <moveit_msgs/RobotTrajectory.h>
+#include <moveit_msgs/GetStateValidity.h>
+#include <tf/tf.h>
+
+#include <sensor_msgs/JointState.h>
 
 #define PI 3.141592654
 
@@ -36,7 +44,6 @@ double euclidDist(double *v1, double *v2, int numOfDOFs)
 	for (int i = 0; i < numOfDOFs; i++)
 	{
 		result += (v1[i] - v2[i])*(v1[i] - v2[i]);
-		// test push from windows
 	}
 	return sqrt(result);
 }
@@ -365,7 +372,12 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
 }
 
-int main() {
+void jointCallback(const sensor_msgs::JointState::ConstPtr& js)
+{
+  ROS_INFO("I heard: [%d]", js->position);
+}
+
+int main(int argc, char **argv) {
 	clock_t startTime = clock();
     int numOfDOFs = 5;
 	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
@@ -376,7 +388,13 @@ int main() {
 	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
 	printPlan(plan, planLength, numOfDOFs);
 
+    ros::init(argc, argv, "listener");
+    ros::NodeHandle n;
+    ros::Subscriber sub = n.subscribe("joint", 1000, jointCallback);
+    ros::spin();    
+
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 
     return 0;
 }
+
