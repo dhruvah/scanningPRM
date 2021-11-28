@@ -11,6 +11,7 @@
 #include <queue>
 #include <stack>
 #include <iostream>
+#include <sstream>
 
 #include <ros/ros.h>
 
@@ -30,6 +31,7 @@
 #include <trajectory_msgs/JointTrajectory.h>
 
 #include <std_msgs/String.h>
+
 
 #define PI 3.141592654
 
@@ -413,7 +415,8 @@ int main(int argc, char **argv) {
 	// string j1 = "arm";
 
 	// vector<double> q_check = {1.66, -0.9, -1.06, -3.14, -1.99, 1.48};
-	vector<double> q_check = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
+	// vector<double> q_check = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
+	vector<double> q_check = {0.0,0.0,3.3,0.0,0.0,0.0};
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
 	planning_scene::PlanningScene planning_scene(kinematic_model);
@@ -427,10 +430,15 @@ int main(int argc, char **argv) {
 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
 	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
-  	ROS_INFO_STREAM("Test 7: Current state is " << (collision_result.collision ? "in" : "not in") << " collision");
+  	ROS_INFO_STREAM("Test 7: check collision - Current state is " << (collision_result.collision ? "in" : "not in") << " collision");
 
-	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	// printPlan(plan, planLength, numOfDOFs);
+	// moveit::core::RobotState copied_state2 = planning_scene.getCurrentState();
+	// copied_state2.setJointGroupPositions(PLANNING_GROUP, q_check);
+	// bool validity = planning_scene.isStateValid(copied_state, PLANNING_GROUP);
+	// ROS_INFO_STREAM("Test 7: is state valid - Current state is " << (validity ? "in" : "not in") << " collision");
+
+	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	printPlan(plan, planLength, numOfDOFs);
 	// cout << "Should output -> " << plan[0][0] << endl;
 
 	// vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
@@ -450,32 +458,78 @@ int main(int argc, char **argv) {
 
 	// sensor_msgs::JointState js;
 	trajectory_msgs::JointTrajectory jt;
+	
 	// // ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
-	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 1);
+	int i,j = 0;
+	double dt = 0.01;
+	ros::Duration time;
 
-	while (ros::ok())
+	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 100);
+	ros::Duration(1,0).sleep();
+	jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
+	
+	jt.points.resize(1);
+	ros::Rate rate(1);
+	jt.header.stamp = ros::Time::now();
+	jt.points.resize(planLength);
+
+	vector<vector<double>> store_plan;
+	while (i < planLength)
 	{
-		// vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
-		// for (int i = 0; i < numOfDOFs; i++) 
-		// {
-		// 	q_test.push_back(plan[0][i]);
-		// }
-		// q_test.push_back(0);
-		// js.position = q_test;
-		jt.points.resize(1);
-		jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
+		vector<double> q_plan;
+		// // cout << "Here!" << endl;	
+		// // cout << "ros plan check: " << plan[0] << endl;
+		for (int j = 0; j < numOfDOFs; j++)
+		{
+			// cout << plan[i][j] << endl;
+			q_plan.push_back(plan[i][j]);
+		}
+		store_plan.push_back(q_plan);
+		
+		jt.points[i].positions = q_plan;
+		jt.points[i].time_from_start = {i+1,0};
+		
+		i++;
+		// // cout << "There!" << endl;
+	}
+
+	// while (ros::ok())
+	// {
+	// 	// vector<double> q_test = {0.5,0.5,0.02,0.5,0.8,1.0,0.0};
+	// 	// for (int i = 0; i < numOfDOFs; i++) 
+	// 	// {
+	// 	// 	q_test.push_back(plan[0][i]);
+	// 	// }
+	// 	// q_test.push_back(0);
+	// 	// js.position = q_test;
+	
 		
 		// jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
-		jt.points[0].positions = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
-		jt.points[0].time_from_start = {1,0};
-
-		jt_pub.publish(jt);
+		// jt.points[1].positions = {0.5,0.5,1.2,0.8,0.8,1.0};
 		
-		ros::spinOnce();
-	}
+	// 	// jt.points[0].positions = {0.0,0.0,3.3,0.0,0.0,0.0};
+	// 	// trajectory_msgs::JointTrajectoryPoint jtp;
+		
+	// 	// jtp.positions = store_plan[0];
+	// 	// jtp.time_from_start = {1,0};
+	// 	// jt.points[j].positions = store_plan[j];
+		
+		// jt.points[0].time_from_start = {1,0};
+		// jt.points[1].time_from_start = {2,0};
+	// 	// jt.points.push_back(jtp);
+	// 	// jt.points[i] = jtp;
+	jt_pub.publish(jt);
+		
+		// ros::spinOnce();
+	// 	rate.sleep();
+	// 	// j++;
+	// }
+
+	// jt_pub.publish(jt);
 	
     // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
-    // ros::spin();    
+    ros::spin();
+	// loop_rate.sleep();
 
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 
