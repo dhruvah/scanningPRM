@@ -40,15 +40,48 @@ using namespace std;
 // need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
 // will need to save data elsewhere in that case
 struct Node;
-static unordered_map<int, Node*> vertices;
-static unordered_map<int, vector<int>> components;
+unordered_map<int, Node*> vertices;
+unordered_map<int, vector<int>> components;
 static bool mapGenerated;
 static int numVertices = 0;
 static int maxNeighbors = 10;
-static int epsilon = 2;
+static int epsilon = 2*PI; //2
 static double i_step = 0.05;
 string PLANNING_GROUP = "arm";
 
+// void init_scene(const moveit::core::RobotModelPtr& kinematic_model)
+// {
+// 	planning_scene::PlanningScene planning_scene(kinematic_model);
+
+// 	collision_detection::CollisionRequest collision_request;
+//   	collision_detection::CollisionResult collision_result;
+
+// 	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
+// 	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
+// 	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
+// 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
+
+// 	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+// 	return;
+// }
+
+bool is_valid_config(double* angles)
+{
+	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
+	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
+	planning_scene::PlanningScene planning_scene(kinematic_model);
+
+	collision_detection::CollisionRequest collision_request;
+  	collision_detection::CollisionResult collision_result;
+
+	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
+	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
+	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
+	copied_state.setJointGroupPositions(PLANNING_GROUP, angles);
+
+	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+	return collision_result.collision;
+}
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
 {
@@ -131,7 +164,7 @@ void randomSample(double *angles, int numOfDOFs, double *map, int xSize, int ySi
 	{
 		angles[i] = randomAngleGen();
 	}
-	if (true) // need to change this to collision check, use fcl library
+	if (!is_valid_config(angles)) // need to change this to collision check, use fcl library
 	{
 		return;
 	}
@@ -176,7 +209,7 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 		{
 			if (q->neighbors.size() <= maxNeighbors)  // could also be (q->comp_id != it.second->comp_id) if only connecting components once (this was a problem before though)
 			{
-				if (true)	// need to implement obstacleFree function here (interpolate and check for collisions between configs)
+				if (is_valid_config(angles))	// need to implement obstacleFree function here (interpolate and check for collisions between configs)
 				{
 					newId = it.second->compId;
 					q->addEdge(it.second);
@@ -326,8 +359,9 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 	}
 	if (goalFound)
 	{
-		cout << "Path found\n";
+		cout << "Goal found. Now Backtracking\n";
 		backtrackPRM(best, numOfDOFs, plan, planLength);
+		cout << "Path found" << endl;
 	}
 	else
 	{
@@ -374,11 +408,16 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 		cout << "no viable path exists\n";
 	}
 
-	removeFromGraph(qGoal, vertices, components);
-	removeFromGraph(qStart, vertices, components);
-	resetNodeAstarParams(vertices);
-	qGoal, qStart = nullptr;
-	numVertices -= 2;
+	// cout << "Aaj" << endl;
+	// removeFromGraph(qGoal, vertices, components);
+	// cout << "Gaand" << endl;
+	// removeFromGraph(qStart, vertices, components);
+	// cout << "lag" << endl;
+	// resetNodeAstarParams(vertices);
+	// cout << "rahii" << endl;
+	// qGoal, qStart = nullptr;
+	// cout << "haiiii" << endl;
+	// numVertices -= 2;
 
 	// deletePointers(vertices);  // double check this to make sure all pointers deleted
 	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
@@ -398,8 +437,12 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
     int numOfDOFs = 6;
-	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
-	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
+	// double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
+	// double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
+	// double qStart[numOfDOFs] = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
+	// double qGoal[numOfDOFs]  = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
+	double qStart[numOfDOFs] = {0, -0.78, 0, 0, 0, 0};
+	double qGoal[numOfDOFs]  = {0, 0.78, 0, 0, 0, 0};
 	double **plan = 0;
 	int planLength;
 
@@ -432,29 +475,35 @@ int main(int argc, char **argv) {
 	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
   	ROS_INFO_STREAM("Test 7: check collision - Current state is " << (collision_result.collision ? "in" : "not in") << " collision");
 
+	// init_scene(kinematic_model);
 	// moveit::core::RobotState copied_state2 = planning_scene.getCurrentState();
 	// copied_state2.setJointGroupPositions(PLANNING_GROUP, q_check);
 	// bool validity = planning_scene.isStateValid(copied_state, PLANNING_GROUP);
 	// ROS_INFO_STREAM("Test 7: is state valid - Current state is " << (validity ? "in" : "not in") << " collision");
 
+	// ......................PLANNER........................
 	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	if (planLength == 0)
+	{
+		cout << "Exiting..." << endl;
+	}
+	cout << "Should output plan details " << endl;
 	printPlan(plan, planLength, numOfDOFs);
-	// cout << "Should output -> " << plan[0][0] << endl;
 
-	// vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-	// moveit_msgs::RobotState scanpro_robot_state;
-	// moveit_msgs::GetStateValidity isValid;
-	// moveit_msgs::GetStateValidityRequest req;
-	// moveit_msgs::GetStateValidityResponse res;
-	// scanpro_robot_state.joint_state.position = q_check;
-	// // ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
-	// // check_val_service.
-	// isValid.request = req;
-	// // req.group_name = ..............
-	// req.robot_state = scanpro_robot_state;
-	// isValid.response = res;
+	vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
+	moveit_msgs::RobotState scanpro_robot_state;
+	moveit_msgs::GetStateValidity isValid;
+	moveit_msgs::GetStateValidityRequest req;
+	moveit_msgs::GetStateValidityResponse res;
+	scanpro_robot_state.joint_state.position = q_check;
+	ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
 
-	// cout << "Checking validity: " << res << endl;
+	isValid.request = req;
+	// req.group_name = ..............
+	req.robot_state = scanpro_robot_state;
+	isValid.response = res;
+
+	cout << "Checking validity: " << res << endl;
 
 	// sensor_msgs::JointState js;
 	trajectory_msgs::JointTrajectory jt;
@@ -468,12 +517,14 @@ int main(int argc, char **argv) {
 	ros::Duration(1,0).sleep();
 	jt.joint_names =  {"joint_1","joint_2","joint_3","joint_4","joint_5","joint_6"};
 	
-	jt.points.resize(1);
 	ros::Rate rate(1);
 	jt.header.stamp = ros::Time::now();
+
+	// .....................IMPORTANT..............................
 	jt.points.resize(planLength);
 
 	vector<vector<double>> store_plan;
+	cout << "Publishing plan to Gazebo" << endl;
 	while (i < planLength)
 	{
 		vector<double> q_plan;
@@ -492,6 +543,7 @@ int main(int argc, char **argv) {
 		i++;
 		// // cout << "There!" << endl;
 	}
+	// .....................IMPORTANT..............................
 
 	// while (ros::ok())
 	// {
@@ -503,19 +555,30 @@ int main(int argc, char **argv) {
 	// 	// q_test.push_back(0);
 	// 	// js.position = q_test;
 	
+	// .....................TESTING!!!..............................
+	// jt.points.resize(2);
+	// jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
+	// jt.points[1].positions = {0.5,0.5,1.2,0.8,0.8,1.0};
+	// jt.points[0].positions = {0, -0.78, 0, 0, 0, 0};
+	// jt.points[1].positions = {0, 0.78, 0, 0, 0, 0};
+
+	// jt.points[0].positions = {0,0,0,0,0,0};
+	// jt.points[1].positions = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
+	// jt.points[2].positions = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
+	
+	// // 	// jt.points[0].positions = {0.0,0.0,3.3,0.0,0.0,0.0};
+	// // 	// trajectory_msgs::JointTrajectoryPoint jtp;
 		
-		// jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
-		// jt.points[1].positions = {0.5,0.5,1.2,0.8,0.8,1.0};
+	// // 	// jtp.positions = store_plan[0];
+	// // 	// jtp.time_from_start = {1,0};
+	// // 	// jt.points[j].positions = store_plan[j];
+	
 		
-	// 	// jt.points[0].positions = {0.0,0.0,3.3,0.0,0.0,0.0};
-	// 	// trajectory_msgs::JointTrajectoryPoint jtp;
-		
-	// 	// jtp.positions = store_plan[0];
-	// 	// jtp.time_from_start = {1,0};
-	// 	// jt.points[j].positions = store_plan[j];
-		
-		// jt.points[0].time_from_start = {1,0};
-		// jt.points[1].time_from_start = {2,0};
+	// jt.points[0].time_from_start = {1,0};
+	// jt.points[1].time_from_start = {5,0};
+	// jt.points[2].time_from_start = {10,0};
+	// .....................TESTING!!!..............................
+
 	// 	// jt.points.push_back(jtp);
 	// 	// jt.points[i] = jtp;
 	jt_pub.publish(jt);
@@ -528,7 +591,7 @@ int main(int argc, char **argv) {
 	// jt_pub.publish(jt);
 	
     // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
-    ros::spin();
+    // ros::spin();
 	// loop_rate.sleep();
 
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
