@@ -52,8 +52,8 @@ unordered_map<int, Node*> vertices;
 unordered_map<int, vector<int>> components;
 static bool mapGenerated;
 static int numVertices = 0;
-static int maxNeighbors = 10;
-static int epsilon = 2*PI; //2
+static int maxNeighbors = 100;
+static int epsilon = PI/4; //2 <<<<<<<<< parameter tuning
 static double i_step = 0.05;
 string PLANNING_GROUP = "arm";
 vector<double*> valid_states;
@@ -477,10 +477,12 @@ int main(int argc, char **argv) {
     int numOfDOFs = 6;
 	// double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
 	// double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
-	double qStart[numOfDOFs] = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
-	double qGoal[numOfDOFs]  = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
+	// double qStart[numOfDOFs] = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
+	// double qGoal[numOfDOFs]  = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
 	// double qStart[numOfDOFs] = {0, -0.78, 0, 0, 0, 0};
 	// double qGoal[numOfDOFs]  = {0, 0.78, 0, 0, 0, 0};
+	double qStart[numOfDOFs] = {-120*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
+	double qGoal[numOfDOFs]  = {-60*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double **plan = 0;
 	int planLength;
 
@@ -513,7 +515,7 @@ int main(int argc, char **argv) {
 	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
-	int n_samples = 10000;
+	int n_samples = 100000;
 	// vector<double*> valid_states;
 	for (int k = 0; k < n_samples; k++)
 	{
@@ -553,7 +555,7 @@ int main(int argc, char **argv) {
 
 	// ......................PLANNER........................
 	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	if (planLength == 0)
+	if (planLength <= 2)
 	{
 		cout << "Exiting..." << endl;
 		return 0;
