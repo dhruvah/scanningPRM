@@ -1,0 +1,23 @@
+Demo Checklist
+
+Collision Checking
+    - ROS_INFO logging remove
+    - Limit random joint angles PRM
+    - Prebuild .txt file with valid configs
+
+Object
+    - Create 1 Object
+    - Setup MoveIt Config for object (include in URDF)
+    - Expand for 2 more objects
+
+Waypoint Generation
+    - Generate manual waypoints around the object
+    - Run Astar for multiple start->goal pairs 
+
+PRM Mods
+    - Skew Random configurations close to object
+    - Nearest Neighbors
+
+
+*Stretch Goal
+

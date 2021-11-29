@@ -14,13 +14,17 @@
 #include <sstream>
 
 #include <ros/ros.h>
+#include <ros/console.h>
 
 #include <moveit_msgs/PositionIKRequest.h>
 #include <moveit_msgs/RobotState.h>
+#include <moveit_msgs/PlanningSceneComponents.h>
+#include <moveit_msgs/PlanningScene.h>
 #include <moveit_msgs/RobotTrajectory.h>
 #include <moveit_msgs/GetStateValidity.h>
 #include <moveit_msgs/GetStateValidityRequest.h>
 #include <moveit_msgs/GetStateValidityResponse.h>
+#include <moveit_msgs/GetPlanningScene.h>
 #include <tf/tf.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -32,6 +36,10 @@
 
 #include <std_msgs/String.h>
 
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <vector>
 
 #define PI 3.141592654
 
@@ -48,6 +56,7 @@ static int maxNeighbors = 10;
 static int epsilon = 2*PI; //2
 static double i_step = 0.05;
 string PLANNING_GROUP = "arm";
+vector<double*> valid_states;
 
 // void init_scene(const moveit::core::RobotModelPtr& kinematic_model)
 // {
@@ -65,7 +74,8 @@ string PLANNING_GROUP = "arm";
 // 	return;
 // }
 
-bool is_valid_config(double* angles)
+// in tatti memory of k.....
+bool is_valid_K(double* angles)
 {
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
@@ -80,7 +90,8 @@ bool is_valid_config(double* angles)
 	copied_state.setJointGroupPositions(PLANNING_GROUP, angles);
 
 	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
-	return collision_result.collision;
+	bool k = false;
+	return k;
 }
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
@@ -147,7 +158,7 @@ struct NodeCompare
 };
 
 
-double randomAngleGen() {
+double randomAngleGen(int i) {
 	double randAngle;
 	static bool init = false;
 	if (!init)
@@ -155,16 +166,40 @@ double randomAngleGen() {
 		srand(time(NULL));
 		init = true;
 	}
-	randAngle = ((double)rand() / RAND_MAX) * 2 * PI; //generates random double between 0 and 2*PI
+	if (i == 0)
+	{
+		randAngle = -2.96706 + ((double)rand() / RAND_MAX)*(2.96706 - (-2.96706)); 
+	}
+	else if (i == 1)
+	{
+		randAngle = -1.745329 + ((double)rand() / RAND_MAX)*(2.356194 - (-1.745329)); 
+	}
+	else if (i == 2)
+	{
+		randAngle = -2.076942 + ((double)rand() / RAND_MAX)*(2.949606 - (-2.076942)); 
+	}
+	else if (i == 3)
+	{
+		randAngle = 0.0; 
+	}
+	else if (i == 4)
+	{
+		randAngle = 0.0;
+	}
+	else
+	{
+		randAngle = 0.0; 
+	}
+	// randAngle = ((double)rand() / RAND_MAX) * 2 * PI; //generates random double between 0 and 2*PI
 	return (randAngle);
 }
 
 void randomSample(double *angles, int numOfDOFs, double *map, int xSize, int ySize) {
 	for (int i = 0; i < numOfDOFs; i++)
 	{
-		angles[i] = randomAngleGen();
+		angles[i] = randomAngleGen(i);
 	}
-	if (!is_valid_config(angles)) // need to change this to collision check, use fcl library
+	if (true) // need to change this to collision check, use fcl library
 	{
 		return;
 	}
@@ -209,7 +244,7 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 		{
 			if (q->neighbors.size() <= maxNeighbors)  // could also be (q->comp_id != it.second->comp_id) if only connecting components once (this was a problem before though)
 			{
-				if (is_valid_config(angles))	// need to implement obstacleFree function here (interpolate and check for collisions between configs)
+				if (true)	// need to implement obstacleFree function here (interpolate and check for collisions between configs)
 				{
 					newId = it.second->compId;
 					q->addEdge(it.second);
@@ -378,13 +413,15 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 
 		Node *q;
 		int tf = 5;
-		int K = 20000;
+		// int K = 20000;
+		int K = valid_states.size();
 		clock_t prmStartTime = clock();
 		// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < tf)
 		for (int k = 0; k < K; k++)
 		{
 			double *s = new double[numOfDOFs];
-			randomSample(s, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
+			s = valid_states[k];
+			// randomSample(s, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
 			q = integrate_with_graph(s, vertices, components, maxNeighbors, numVertices++, epsilon, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check
 		}
 	}
@@ -434,15 +471,16 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 // 	// ROS_ERROR("I heard");
 // }
 
+
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
     int numOfDOFs = 6;
 	// double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
 	// double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
-	// double qStart[numOfDOFs] = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
-	// double qGoal[numOfDOFs]  = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
-	double qStart[numOfDOFs] = {0, -0.78, 0, 0, 0, 0};
-	double qGoal[numOfDOFs]  = {0, 0.78, 0, 0, 0, 0};
+	double qStart[numOfDOFs] = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
+	double qGoal[numOfDOFs]  = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
+	// double qStart[numOfDOFs] = {0, -0.78, 0, 0, 0, 0};
+	// double qGoal[numOfDOFs]  = {0, 0.78, 0, 0, 0, 0};
 	double **plan = 0;
 	int planLength;
 
@@ -455,11 +493,12 @@ int main(int argc, char **argv) {
 	// // setup using just the name of the planning group you would like to control and plan for.
 	// moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
 	// ROS_INFO_NAMED("tutorial", "Reference frame: %s", move_group.getPlanningFrame().c_str());
-	// string j1 = "arm";
+	
+	// string j1 = "arm"; 
 
 	// vector<double> q_check = {1.66, -0.9, -1.06, -3.14, -1.99, 1.48};
 	// vector<double> q_check = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
-	vector<double> q_check = {0.0,0.0,3.3,0.0,0.0,0.0};
+	vector<double> q_check = {1.57,-1.57,0.0,0.0,0.0,0.0};
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
 	planning_scene::PlanningScene planning_scene(kinematic_model);
@@ -467,13 +506,44 @@ int main(int argc, char **argv) {
 	collision_detection::CollisionRequest collision_request;
   	collision_detection::CollisionResult collision_result;
 
+	// possible bug
 	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
+	// moveit::core::RobotState copied_state;
 	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
 	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
+	int n_samples = 10000;
+	// vector<double*> valid_states;
+	for (int k = 0; k < n_samples; k++)
+	{
+		// cout << "debuggg: "<< k << endl;
+		double *s = new double[numOfDOFs];
+		randomSample(s, numOfDOFs, 0, 0, 0);
+		copied_state.setJointGroupPositions(PLANNING_GROUP, s);
+		// planning_scene.isStateValid(copied_state);
+		// planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+
+		// if (!collision_result.collision)
+		if(planning_scene.isStateColliding(copied_state) == 0)
+		// if (true)
+		{
+			valid_states.push_back(s);
+		}
+	}
+	cout << "Size check::::::" << valid_states.size() << endl;
+
+	std::ofstream outFile("example.txt");
+    // std::copy(valid_states.begin(), valid_states.end(), output_iterator);
+	for (const auto &e : valid_states) 
+	{
+		outFile << *e << " " << *(e+1) << " " << *(e+2) << " " << *(e+3) << " " << *(e+4) << " " << *(e+5) << " " << "\n";
+	}
+
 	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+
   	ROS_INFO_STREAM("Test 7: check collision - Current state is " << (collision_result.collision ? "in" : "not in") << " collision");
+	cout << "Testing is valid of planning scene: " << planning_scene.isStateColliding(copied_state) << endl;
 
 	// init_scene(kinematic_model);
 	// moveit::core::RobotState copied_state2 = planning_scene.getCurrentState();
@@ -486,24 +556,41 @@ int main(int argc, char **argv) {
 	if (planLength == 0)
 	{
 		cout << "Exiting..." << endl;
+		return 0;
 	}
 	cout << "Should output plan details " << endl;
 	printPlan(plan, planLength, numOfDOFs);
 
-	vector<double> q_check = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-	moveit_msgs::RobotState scanpro_robot_state;
-	moveit_msgs::GetStateValidity isValid;
-	moveit_msgs::GetStateValidityRequest req;
-	moveit_msgs::GetStateValidityResponse res;
-	scanpro_robot_state.joint_state.position = q_check;
-	ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
+	// vector<double> q_check1 = {1.57,-1.57,0.0,0.0,0.0,0.0};
 
-	isValid.request = req;
-	// req.group_name = ..............
-	req.robot_state = scanpro_robot_state;
-	isValid.response = res;
+	// moveit_msgs::PlanningScene ps;
+	// ps.robot_state.joint_state.position = q_check1;
+	// planning_scene.setPlanningSceneMsg(ps);
+	// cout << "Check planning scene: " << ps.robot_model_name << endl;
 
-	cout << "Checking validity: " << res << endl;
+	// moveit_msgs::GetPlanningScene getScene;
+	// moveit_msgs::RobotState scanpro_robot_state;
+	// moveit_msgs::PlanningSceneComponents ps_components;
+	// moveit_msgs::GetStateValidity isValid;
+	// moveit_msgs::GetStateValidityRequest req;
+	// moveit_msgs::GetStateValidityResponse res;
+	// scanpro_robot_state.joint_state.position = q_check1;
+
+	// ros::ServiceClient get_planning_scene = n.serviceClient<moveit_msgs::GetPlanningScene>("get_planning_scene");
+	// ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
+	// check_val_service.waitForExistence();
+
+	// getScene.request.components = ps_components;
+	// get_planning_scene.call(getScene);
+
+	// isValid.request.robot_state = scanpro_robot_state;
+	// // isValid.request.robot_state = ps.robot_state;
+	// isValid.request.group_name = PLANNING_GROUP;
+
+	// check_val_service.call(isValid);
+	// // isValid.response = res;
+
+	// cout << "Checking validity: " << isValid.response << endl;
 
 	// sensor_msgs::JointState js;
 	trajectory_msgs::JointTrajectory jt;
@@ -525,11 +612,13 @@ int main(int argc, char **argv) {
 
 	vector<vector<double>> store_plan;
 	cout << "Publishing plan to Gazebo" << endl;
+	cout << planLength << endl;
+	cout << plan[planLength-1][0] << endl;
 	while (i < planLength)
 	{
 		vector<double> q_plan;
 		// // cout << "Here!" << endl;	
-		// // cout << "ros plan check: " << plan[0] << endl;
+		cout << "ros plan check: " << plan[0] << endl;
 		for (int j = 0; j < numOfDOFs; j++)
 		{
 			// cout << plan[i][j] << endl;
@@ -541,7 +630,7 @@ int main(int argc, char **argv) {
 		jt.points[i].time_from_start = {i+1,0};
 		
 		i++;
-		// // cout << "There!" << endl;
+		cout << "There!" << endl;
 	}
 	// .....................IMPORTANT..............................
 
@@ -561,6 +650,7 @@ int main(int argc, char **argv) {
 	// jt.points[1].positions = {0.5,0.5,1.2,0.8,0.8,1.0};
 	// jt.points[0].positions = {0, -0.78, 0, 0, 0, 0};
 	// jt.points[1].positions = {0, 0.78, 0, 0, 0, 0};
+	// jt.points[0].positions = {0.0,0.0,3.3,0.0,0.0,0.0};
 
 	// jt.points[0].positions = {0,0,0,0,0,0};
 	// jt.points[1].positions = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
