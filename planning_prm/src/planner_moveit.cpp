@@ -78,7 +78,7 @@ vector<double*> valid_states;
 void is_valid_K(planning_scene::PlanningScene* planning_scene, vector<double> q_check)
 {
 	moveit::core::RobotState copied_state = planning_scene->getCurrentState();
-	// ********need to change 
+	// ********need to change so that array is converted to vector - do const& (for setJointGroupPositions)
 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
 	planning_scene->isStateColliding(copied_state);
