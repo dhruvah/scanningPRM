@@ -52,9 +52,9 @@ unordered_map<int, Node*> vertices;
 unordered_map<int, vector<int>> components;
 static bool mapGenerated;
 static int numVertices = 0;
-static int maxNeighbors = 100;
-static int epsilon = PI/4; //2 <<<<<<<<< parameter tuning
-static double i_step = 0.05;
+static int maxNeighbors = 10;
+static double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
+static double i_step = (PI/4)/2;
 string PLANNING_GROUP = "arm";
 vector<double*> valid_states;
 
@@ -75,23 +75,16 @@ vector<double*> valid_states;
 // }
 
 // in tatti memory of k.....
-bool is_valid_K(double* angles)
+void is_valid_K(planning_scene::PlanningScene* planning_scene, vector<double> q_check)
 {
-	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
-	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
-	planning_scene::PlanningScene planning_scene(kinematic_model);
+	moveit::core::RobotState copied_state = planning_scene->getCurrentState();
+	// ********need to change 
+	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
-	collision_detection::CollisionRequest collision_request;
-  	collision_detection::CollisionResult collision_result;
-
-	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
-	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
-	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
-	copied_state.setJointGroupPositions(PLANNING_GROUP, angles);
-
-	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+	planning_scene->isStateColliding(copied_state);
+	// cout << "Testing is valid of planning scene: " << planning_scene->isStateColliding(copied_state) << endl;
 	bool k = false;
-	return k;
+	return;
 }
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
@@ -500,40 +493,45 @@ int main(int argc, char **argv) {
 
 	// vector<double> q_check = {1.66, -0.9, -1.06, -3.14, -1.99, 1.48};
 	// vector<double> q_check = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
-	vector<double> q_check = {1.57,-1.57,0.0,0.0,0.0,0.0};
+	vector<double> q_check = {0,3.3,0.0,0.0,0.0,0.0};
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
-	planning_scene::PlanningScene planning_scene(kinematic_model);
+	// planning_scene::PlanningScene planning_scene(kinematic_model);
+	
 
 	collision_detection::CollisionRequest collision_request;
   	collision_detection::CollisionResult collision_result;
 
 	// possible bug
-	moveit::core::RobotState copied_state = planning_scene.getCurrentState();
+	// moveit::core::RobotState copied_state = planning_scene.getCurrentState();
 	// moveit::core::RobotState copied_state;
 	// moveit::core::RobotStatePtr copied_state(new moveit::core::RobotState(kinematic_model));
-	collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
-	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
+	// collision_detection::AllowedCollisionMatrix acm = planning_scene.getAllowedCollisionMatrix();
+	// copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
-	int n_samples = 100000;
+	planning_scene::PlanningScene* planning_scene = new planning_scene::PlanningScene(kinematic_model);
+	is_valid_K(planning_scene, q_check);
+	delete planning_scene;
+
+	int n_samples = 20000;
 	// vector<double*> valid_states;
-	for (int k = 0; k < n_samples; k++)
-	{
-		// cout << "debuggg: "<< k << endl;
-		double *s = new double[numOfDOFs];
-		randomSample(s, numOfDOFs, 0, 0, 0);
-		copied_state.setJointGroupPositions(PLANNING_GROUP, s);
-		// planning_scene.isStateValid(copied_state);
-		// planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+	// for (int k = 0; k < n_samples; k++)
+	// {
+	// 	// cout << "debuggg: "<< k << endl;
+	// 	double *s = new double[numOfDOFs];
+	// 	randomSample(s, numOfDOFs, 0, 0, 0);
+	// 	copied_state.setJointGroupPositions(PLANNING_GROUP, s);
+	// 	// planning_scene.isStateValid(copied_state);
+	// 	// planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
 
-		// if (!collision_result.collision)
-		if(planning_scene.isStateColliding(copied_state) == 0)
-		// if (true)
-		{
-			valid_states.push_back(s);
-		}
-	}
-	cout << "Size check::::::" << valid_states.size() << endl;
+	// 	// if (!collision_result.collision)
+	// 	if(planning_scene.isStateColliding(copied_state) == 0)
+	// 	// if (true)
+	// 	{
+	// 		valid_states.push_back(s);
+	// 	}
+	// }
+	// cout << "Size check::::::" << valid_states.size() << endl;
 
 	std::ofstream outFile("example.txt");
     // std::copy(valid_states.begin(), valid_states.end(), output_iterator);
@@ -542,10 +540,9 @@ int main(int argc, char **argv) {
 		outFile << *e << " " << *(e+1) << " " << *(e+2) << " " << *(e+3) << " " << *(e+4) << " " << *(e+5) << " " << "\n";
 	}
 
-	planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
+	// planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
 
-  	ROS_INFO_STREAM("Test 7: check collision - Current state is " << (collision_result.collision ? "in" : "not in") << " collision");
-	cout << "Testing is valid of planning scene: " << planning_scene.isStateColliding(copied_state) << endl;
+
 
 	// init_scene(kinematic_model);
 	// moveit::core::RobotState copied_state2 = planning_scene.getCurrentState();
@@ -554,14 +551,15 @@ int main(int argc, char **argv) {
 	// ROS_INFO_STREAM("Test 7: is state valid - Current state is " << (validity ? "in" : "not in") << " collision");
 
 	// ......................PLANNER........................
-	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	if (planLength <= 2)
-	{
-		cout << "Exiting..." << endl;
-		return 0;
-	}
-	cout << "Should output plan details " << endl;
-	printPlan(plan, planLength, numOfDOFs);
+	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
+	// cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
+	// if (planLength <= 2)
+	// {
+	// 	cout << "Exiting..." << endl;
+	// 	return 0;
+	// }
+	// cout << "Should output plan details " << endl;
+	// printPlan(plan, planLength, numOfDOFs);
 
 	// vector<double> q_check1 = {1.57,-1.57,0.0,0.0,0.0,0.0};
 
@@ -610,30 +608,30 @@ int main(int argc, char **argv) {
 	jt.header.stamp = ros::Time::now();
 
 	// .....................IMPORTANT..............................
-	jt.points.resize(planLength);
+	// jt.points.resize(planLength);
 
-	vector<vector<double>> store_plan;
-	cout << "Publishing plan to Gazebo" << endl;
-	cout << planLength << endl;
-	cout << plan[planLength-1][0] << endl;
-	while (i < planLength)
-	{
-		vector<double> q_plan;
-		// // cout << "Here!" << endl;	
-		cout << "ros plan check: " << plan[0] << endl;
-		for (int j = 0; j < numOfDOFs; j++)
-		{
-			// cout << plan[i][j] << endl;
-			q_plan.push_back(plan[i][j]);
-		}
-		store_plan.push_back(q_plan);
+	// vector<vector<double>> store_plan;
+	// cout << "Publishing plan to Gazebo" << endl;
+	// cout << planLength << endl;
+	// cout << plan[planLength-1][0] << endl;
+	// while (i < planLength)
+	// {
+	// 	vector<double> q_plan;
+	// 	// // cout << "Here!" << endl;	
+	// 	cout << "ros plan check: " << plan[0] << endl;
+	// 	for (int j = 0; j < numOfDOFs; j++)
+	// 	{
+	// 		// cout << plan[i][j] << endl;
+	// 		q_plan.push_back(plan[i][j]);
+	// 	}
+	// 	store_plan.push_back(q_plan);
 		
-		jt.points[i].positions = q_plan;
-		jt.points[i].time_from_start = {i+1,0};
+	// 	jt.points[i].positions = q_plan;
+	// 	jt.points[i].time_from_start = {i+1,0};
 		
-		i++;
-		cout << "There!" << endl;
-	}
+	// 	i++;
+	// 	cout << "There!" << endl;
+	// }
 	// .....................IMPORTANT..............................
 
 	// while (ros::ok())
@@ -685,8 +683,6 @@ int main(int argc, char **argv) {
     // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
     // ros::spin();
 	// loop_rate.sleep();
-
-	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 
     return 0;
 }
