@@ -47,14 +47,17 @@ using namespace std;
 
 // need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
 // will need to save data elsewhere in that case
+static int planTime = 5;
+static int K = 10000;
+
 struct Node;
 unordered_map<int, Node*> vertices;
 unordered_map<int, vector<int>> components;
 static bool mapGenerated;
 static int numVertices = 0;
 static int maxNeighbors = 10;
-static double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
-static double i_step = (PI/4)/2;
+static double epsilon = PI/8; //2 <<<<<<<<< parameter tuning
+static double i_step = epsilon/4;
 string PLANNING_GROUP = "arm";
 vector<double*> valid_states;
 
@@ -75,16 +78,17 @@ vector<double*> valid_states;
 // }
 
 // in tatti memory of k.....
-void is_valid_K(planning_scene::PlanningScene* planning_scene, vector<double> q_check)
+bool is_valid_K(const planning_scene::PlanningScene* planning_scene, const vector<double> &q_check)
 {
 	moveit::core::RobotState copied_state = planning_scene->getCurrentState();
 	// ********need to change so that array is converted to vector - do const& (for setJointGroupPositions)
 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
-	planning_scene->isStateColliding(copied_state);
+	
 	// cout << "Testing is valid of planning scene: " << planning_scene->isStateColliding(copied_state) << endl;
-	bool k = false;
-	return;
+	bool k = planning_scene->isStateColliding(copied_state);
+	// if (k) {cout << "Collision detected!\n";}
+	return !k;
 }
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
@@ -187,16 +191,18 @@ double randomAngleGen(int i) {
 	return (randAngle);
 }
 
-void randomSample(double *angles, int numOfDOFs, double *map, int xSize, int ySize) {
+void randomSample(double *angles, int numOfDOFs, const planning_scene::PlanningScene* planning_scene) {
+	vector<double> q_check;
 	for (int i = 0; i < numOfDOFs; i++)
 	{
 		angles[i] = randomAngleGen(i);
+		q_check.push_back(angles[i]);
 	}
-	if (true) // need to change this to collision check, use fcl library
+	if (is_valid_K(planning_scene, q_check)) // need to change this to collision check, use fcl library
 	{
 		return;
 	}
-	return randomSample(angles, numOfDOFs, map, xSize, ySize);
+	return randomSample(angles, numOfDOFs, planning_scene);
 }
 
 void printAngles(double *angles, int size) {
@@ -218,7 +224,12 @@ void update_component_ids(unordered_map<int, Node*> &vertices, unordered_map<int
 	components[oldId].clear();
 }
 
-Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int maxNeighbors, int idx, double epsilon, int numOfDOFs, double *map, int xSize, int ySize)
+// bool obstacleFree(const double* q1, const double *q2, const planning_scene::PlanningScene* planning_scene) {
+
+// }
+
+Node* integrate_with_graph(	double *angles, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int maxNeighbors, int idx, double epsilon, 
+							int numOfDOFs, const planning_scene::PlanningScene* planning_scene)
 {
 	Node *q = new Node(idx, idx, angles);
 	vertices[idx] = q;
@@ -393,11 +404,13 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 	}
 	else
 	{
+		plan = 0;
+		planLength = 0;
 		cout << "No possible path\n";
 	}
 }
 
-void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength) {
+void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength, const planning_scene::PlanningScene* planning_scene) {
 	if (!mapGenerated) {
 		// pre-processing
 		mapGenerated = true;
@@ -405,23 +418,19 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 		clearOldData(vertices, components);
 
 		Node *q;
-		int tf = 5;
-		// int K = 20000;
-		int K = valid_states.size();
 		clock_t prmStartTime = clock();
-		// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < tf)
+		// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < planTime)
 		for (int k = 0; k < K; k++)
 		{
 			double *s = new double[numOfDOFs];
-			s = valid_states[k];
-			// randomSample(s, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
-			q = integrate_with_graph(s, vertices, components, maxNeighbors, numVertices++, epsilon, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check
+			randomSample(s, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check inside randomSample
+			q = integrate_with_graph(s, vertices, components, maxNeighbors, numVertices++, epsilon, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check
 		}
 	}
 
 	// query
-	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
-	Node *qStart = integrate_with_graph(startAngles, vertices, components, maxNeighbors, ++numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
+	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, numVertices, epsilon, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
+	Node *qStart = integrate_with_graph(startAngles, vertices, components, maxNeighbors, ++numVertices, epsilon, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
 	numVertices++;
 
 	cout << "num of vertices: " << numVertices << endl;
@@ -435,21 +444,23 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 	}
 	else
 	{
+		plan = 0;
+		planLength = 0;
 		cout << "no viable path exists\n";
 	}
 
 	// cout << "Aaj" << endl;
-	// removeFromGraph(qGoal, vertices, components);
+	removeFromGraph(qGoal, vertices, components);
 	// cout << "Gaand" << endl;
-	// removeFromGraph(qStart, vertices, components);
+	removeFromGraph(qStart, vertices, components);
 	// cout << "lag" << endl;
-	// resetNodeAstarParams(vertices);
+	resetNodeAstarParams(vertices);
 	// cout << "rahii" << endl;
-	// qGoal, qStart = nullptr;
+	qGoal, qStart = nullptr;
 	// cout << "haiiii" << endl;
-	// numVertices -= 2;
+	numVertices -= 2;
 
-	// deletePointers(vertices);  // double check this to make sure all pointers deleted
+	deletePointers(vertices);  // double check this to make sure all pointers deleted
 	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
 }
 
@@ -468,12 +479,6 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
     int numOfDOFs = 6;
-	// double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0, 0};
-	// double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4, 0};
-	// double qStart[numOfDOFs] = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
-	// double qGoal[numOfDOFs]  = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
-	// double qStart[numOfDOFs] = {0, -0.78, 0, 0, 0, 0};
-	// double qGoal[numOfDOFs]  = {0, 0.78, 0, 0, 0, 0};
 	double qStart[numOfDOFs] = {-120*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double qGoal[numOfDOFs]  = {-60*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double **plan = 0;
@@ -493,14 +498,10 @@ int main(int argc, char **argv) {
 
 	// vector<double> q_check = {1.66, -0.9, -1.06, -3.14, -1.99, 1.48};
 	// vector<double> q_check = {-1.52,0.226,1.85,3.07,-0.38,-1.47};
-	vector<double> q_check = {0,3.3,0.0,0.0,0.0,0.0};
+	// vector<double> q_check = {0,3.3,0.0,0.0,0.0,0.0};
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
 	// planning_scene::PlanningScene planning_scene(kinematic_model);
-	
-
-	collision_detection::CollisionRequest collision_request;
-  	collision_detection::CollisionResult collision_result;
 
 	// possible bug
 	// moveit::core::RobotState copied_state = planning_scene.getCurrentState();
@@ -510,10 +511,10 @@ int main(int argc, char **argv) {
 	// copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
 
 	planning_scene::PlanningScene* planning_scene = new planning_scene::PlanningScene(kinematic_model);
-	is_valid_K(planning_scene, q_check);
-	delete planning_scene;
+	// is_valid_K(planning_scene, q_check);
+	
 
-	int n_samples = 20000;
+	// int n_samples = 20000;
 	// vector<double*> valid_states;
 	// for (int k = 0; k < n_samples; k++)
 	// {
@@ -533,12 +534,12 @@ int main(int argc, char **argv) {
 	// }
 	// cout << "Size check::::::" << valid_states.size() << endl;
 
-	std::ofstream outFile("example.txt");
+	// std::ofstream outFile("example.txt");
     // std::copy(valid_states.begin(), valid_states.end(), output_iterator);
-	for (const auto &e : valid_states) 
-	{
-		outFile << *e << " " << *(e+1) << " " << *(e+2) << " " << *(e+3) << " " << *(e+4) << " " << *(e+5) << " " << "\n";
-	}
+	// for (const auto &e : valid_states) 
+	// {
+	// 	outFile << *e << " " << *(e+1) << " " << *(e+2) << " " << *(e+3) << " " << *(e+4) << " " << *(e+5) << " " << "\n";
+	// }
 
 	// planning_scene.checkCollision(collision_request, collision_result, copied_state, acm);
 
@@ -551,51 +552,19 @@ int main(int argc, char **argv) {
 	// ROS_INFO_STREAM("Test 7: is state valid - Current state is " << (validity ? "in" : "not in") << " collision");
 
 	// ......................PLANNER........................
-	// plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	// cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
-	// if (planLength <= 2)
-	// {
-	// 	cout << "Exiting..." << endl;
-	// 	return 0;
-	// }
-	// cout << "Should output plan details " << endl;
-	// printPlan(plan, planLength, numOfDOFs);
+	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength, planning_scene);
+	delete planning_scene;
+	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
+	if (planLength <= 2)
+	{
+		cout << "Exiting..." << endl;
+		return 0;
+	}
+	cout << "Should output plan details " << endl;
+	printPlan(plan, planLength, numOfDOFs);
 
-	// vector<double> q_check1 = {1.57,-1.57,0.0,0.0,0.0,0.0};
-
-	// moveit_msgs::PlanningScene ps;
-	// ps.robot_state.joint_state.position = q_check1;
-	// planning_scene.setPlanningSceneMsg(ps);
-	// cout << "Check planning scene: " << ps.robot_model_name << endl;
-
-	// moveit_msgs::GetPlanningScene getScene;
-	// moveit_msgs::RobotState scanpro_robot_state;
-	// moveit_msgs::PlanningSceneComponents ps_components;
-	// moveit_msgs::GetStateValidity isValid;
-	// moveit_msgs::GetStateValidityRequest req;
-	// moveit_msgs::GetStateValidityResponse res;
-	// scanpro_robot_state.joint_state.position = q_check1;
-
-	// ros::ServiceClient get_planning_scene = n.serviceClient<moveit_msgs::GetPlanningScene>("get_planning_scene");
-	// ros::ServiceClient check_val_service = n.serviceClient<moveit_msgs::GetStateValidity>("check_state_validity");
-	// check_val_service.waitForExistence();
-
-	// getScene.request.components = ps_components;
-	// get_planning_scene.call(getScene);
-
-	// isValid.request.robot_state = scanpro_robot_state;
-	// // isValid.request.robot_state = ps.robot_state;
-	// isValid.request.group_name = PLANNING_GROUP;
-
-	// check_val_service.call(isValid);
-	// // isValid.response = res;
-
-	// cout << "Checking validity: " << isValid.response << endl;
-
-	// sensor_msgs::JointState js;
 	trajectory_msgs::JointTrajectory jt;
-	
-	// // ros::Publisher js_pub = n.advertise<sensor_msgs::JointState>("/joint_states", 1);
+
 	int i,j = 0;
 	double dt = 0.01;
 	ros::Duration time;
@@ -608,30 +577,30 @@ int main(int argc, char **argv) {
 	jt.header.stamp = ros::Time::now();
 
 	// .....................IMPORTANT..............................
-	// jt.points.resize(planLength);
+	jt.points.resize(planLength);
 
-	// vector<vector<double>> store_plan;
-	// cout << "Publishing plan to Gazebo" << endl;
-	// cout << planLength << endl;
-	// cout << plan[planLength-1][0] << endl;
-	// while (i < planLength)
-	// {
-	// 	vector<double> q_plan;
-	// 	// // cout << "Here!" << endl;	
-	// 	cout << "ros plan check: " << plan[0] << endl;
-	// 	for (int j = 0; j < numOfDOFs; j++)
-	// 	{
-	// 		// cout << plan[i][j] << endl;
-	// 		q_plan.push_back(plan[i][j]);
-	// 	}
-	// 	store_plan.push_back(q_plan);
+	vector<vector<double>> store_plan;
+	cout << "Publishing plan to Gazebo" << endl;
+	cout << planLength << endl;
+	cout << plan[planLength-1][0] << endl;
+	while (i < planLength)
+	{
+		vector<double> q_plan;
+		// // cout << "Here!" << endl;	
+		cout << "ros plan check: " << plan[0] << endl;
+		for (int j = 0; j < numOfDOFs; j++)
+		{
+			// cout << plan[i][j] << endl;
+			q_plan.push_back(plan[i][j]);
+		}
+		store_plan.push_back(q_plan);
 		
-	// 	jt.points[i].positions = q_plan;
-	// 	jt.points[i].time_from_start = {i+1,0};
+		jt.points[i].positions = q_plan;
+		jt.points[i].time_from_start = {i+1,0};
 		
-	// 	i++;
-	// 	cout << "There!" << endl;
-	// }
+		i++;
+		cout << "There!" << endl;
+	}
 	// .....................IMPORTANT..............................
 
 	// while (ros::ok())
@@ -643,46 +612,8 @@ int main(int argc, char **argv) {
 	// 	// }
 	// 	// q_test.push_back(0);
 	// 	// js.position = q_test;
-	
-	// .....................TESTING!!!..............................
-	// jt.points.resize(2);
-	// jt.points[0].positions = {0.5,0.5,3.3,0.5,0.8,1.0};
-	// jt.points[1].positions = {0.5,0.5,1.2,0.8,0.8,1.0};
-	// jt.points[0].positions = {0, -0.78, 0, 0, 0, 0};
-	// jt.points[1].positions = {0, 0.78, 0, 0, 0, 0};
-	// jt.points[0].positions = {0.0,0.0,3.3,0.0,0.0,0.0};
 
-	// jt.points[0].positions = {0,0,0,0,0,0};
-	// jt.points[1].positions = {-2.1118, 0.855, 1.797, -3.14, -0.488, -2.1118};
-	// jt.points[2].positions = {2.042, -1.047, -0.785, 0, -1.309, -1.099};
-	
-	// // 	// jt.points[0].positions = {0.0,0.0,3.3,0.0,0.0,0.0};
-	// // 	// trajectory_msgs::JointTrajectoryPoint jtp;
-		
-	// // 	// jtp.positions = store_plan[0];
-	// // 	// jtp.time_from_start = {1,0};
-	// // 	// jt.points[j].positions = store_plan[j];
-	
-		
-	// jt.points[0].time_from_start = {1,0};
-	// jt.points[1].time_from_start = {5,0};
-	// jt.points[2].time_from_start = {10,0};
-	// .....................TESTING!!!..............................
-
-	// 	// jt.points.push_back(jtp);
-	// 	// jt.points[i] = jtp;
 	jt_pub.publish(jt);
-		
-		// ros::spinOnce();
-	// 	rate.sleep();
-	// 	// j++;
-	// }
-
-	// jt_pub.publish(jt);
-	
-    // ros::Subscriber sub = n.subscribe("/joint_states", 10, jointCallback);
-    // ros::spin();
-	// loop_rate.sleep();
 
     return 0;
 }
