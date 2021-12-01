@@ -52,7 +52,7 @@
 using namespace std;
 
 // static int planTime = 5;
-static int K = 15000;
+static int K = 30000;
 
 const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
 const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
@@ -60,7 +60,7 @@ const double numPlanningJoints = 5;
 
 int numVertices = 0;
 const int maxNeighbors = 20;
-const double epsilon = PI/8; //2 <<<<<<<<< parameter tuning
+const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
 const double i_step = PI/32;
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
@@ -86,6 +86,7 @@ double euclidDist(const double *v1, const double *v2, int numOfDOFs)
 	}
 	return sqrt(result);
 }
+
 struct Node {
 	int id;
 	int compId;
@@ -309,16 +310,16 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 	return q;
 }
 
-// void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
-// {
-// 	for (int id : n->neighbors)
-// 	{
-// 		vertices[id]->neighbors.pop_back();
-// 	}
-// 	vertices.erase(n->id);
-// 	components[n->compId].pop_back();
-// 	delete n;
-// }
+void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
+{
+	for (int id : n->neighbors)
+	{
+		vertices[id]->neighbors.pop_back();
+	}
+	vertices.erase(n->id);
+	components[n->compId].pop_back();
+	delete n;
+}
 
 void deletePointers(unordered_map<int, Node*> &vertices) {
 	Node *q;
@@ -581,6 +582,8 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 
 		if (qGoal->compId == qStart->compId)
 		{
+			printAngles(qStart->angles, numOfDOFs);
+			printAngles(qGoal->angles, numOfDOFs);
 			aStarSearch(vertices, qStart, qGoal, numOfDOFs, localPlan, localPlanLength);
 			// printPlan(localPlan, localPlanLength, numOfDOFs);
 			globalPlan = (double**)realloc(globalPlan, (globalPlanLength+localPlanLength)*sizeof(double**));
@@ -590,6 +593,13 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 			}
 
 			globalPlanLength += localPlanLength;
+			localPlan = 0;
+			localPlanLength = 0;
+			// removeFromGraph(qGoal, vertices, components);
+			// removeFromGraph(qStart, vertices, components);
+			// qGoal = nullptr, qStart = nullptr;
+			// numVertices -= 2;
+			resetNodeAstarParams(vertices);
 		}
 		else
 		{
@@ -611,7 +621,7 @@ int main(int argc, char **argv) {
 
 	string line;
 	ifstream myfile;
-	myfile.open("waypt2.txt", ios::in);
+	myfile.open("waypt1.txt", ios::in);
 	if (myfile.is_open())
 	{
 		int spacePos;
@@ -636,6 +646,7 @@ int main(int argc, char **argv) {
 	else {
 		cout << "cannot open file\n";
 	}
+	printPlan(waypoints, numOfWaypoints, numOfDOFs);
 
 	// double q1[numOfDOFs] = {-120*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	// double q2[numOfDOFs]  = {-90*PI/180, 20*PI/180, 150*PI/180, 0, 0, 0};
@@ -724,7 +735,7 @@ int main(int argc, char **argv) {
 		store_plan.push_back(q_plan);
 		
 		jt.points[i].positions = q_plan;
-		jt.points[i].time_from_start = ros::Duration(i + 1);
+		jt.points[i].time_from_start = ros::Duration(i + 2);
 		
 		i++;
 		// cout << "There!" << endl;
