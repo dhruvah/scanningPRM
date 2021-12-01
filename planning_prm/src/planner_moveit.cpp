@@ -69,7 +69,7 @@ bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* ang
 
 	moveit::core::RobotState copied_state = planning_scene->getCurrentState();
 	copied_state.setJointGroupPositions(PLANNING_GROUP, q_check);
-
+	
 	return !planning_scene->isStateColliding(copied_state);
 }
 
@@ -523,7 +523,7 @@ int main(int argc, char **argv) {
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
 
 	planning_scene::PlanningScene* planning_scene = new planning_scene::PlanningScene(kinematic_model);
-
+	
 	// ......................PLANNER........................
 	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength, planning_scene);
 	delete planning_scene; // DO NOT DELETE THIS LINE
