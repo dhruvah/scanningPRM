@@ -53,12 +53,12 @@ static int K = 10000;
 struct Node;
 unordered_map<int, Node*> vertices;
 unordered_map<int, vector<int>> components;
-static bool mapGenerated;
-static int numVertices = 0;
-static int maxNeighbors = 20;
-static double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
-static double i_step = PI/16;
-string PLANNING_GROUP = "arm";
+bool mapGenerated;
+int numVertices = 0;
+const int maxNeighbors = 20;
+const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
+const double i_step = PI/16;
+const string PLANNING_GROUP = "arm";
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
 {
@@ -125,6 +125,23 @@ struct Node {
 		this->g = INT16_MAX;
 		this->parent = 0;
 	}
+
+	// void serialize(FILE* f, bool bWrite, int numOfDOFs) {
+	// 	this->resetAstarParams();
+
+	// 	if (bWrite) {
+	// 		fwrite(&id, sizeof(id), 1, f);
+	// 		fwrite(&compId, sizeof(compId), 1, f);
+	// 		fwrite(&angles[0], sizeof(double), numOfDOFs, f);
+	// 		fwrite(&neighbors[0], sizeof(int), neighbors.size(), f);
+	// 	}
+	// 	else {
+	// 		fread(&id, sizeof(id), 1, f);
+	// 		fread(&compId, sizeof(compId), 1, f);
+	// 		fread(&angles[0], sizeof(double), numOfDOFs, f);
+	// 		fread(&neighbors[0], sizeof(int), neighbors.size(), f);
+	// 	}
+	// }
 
 };
 
@@ -394,6 +411,42 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 	}
 }
 
+// void saveData(int numOfDOFs) {
+// 	FILE *fv = fopen("vertices_data", "wb");
+//     for(const auto& it : vertices){
+//         fwrite(&(it.first), sizeof(int), 1, fv);
+//         it.second->serialize(fv, true, numOfDOFs);
+//     }
+//     fclose(fv);
+
+// 	FILE *fc = fopen("components_data", "wb");
+//     for(const auto& it : components){
+//         fwrite(&(it.first), sizeof(int), 1, fc);
+//         fwrite(&(it.second)[0], sizeof(int), it.second.size(), fc);
+//     }
+//     fclose(fc);
+// }
+
+// void loadData() {
+//     FILE *fv = fopen("vertices_data", "rb");
+//     int keyv;
+//     Node* valv;
+//     while(fread(&keyv, 8, 1, fv)){
+//         fread(&valv, 1, 1, fv);
+//         vertices[keyv] = valv;
+//     }
+//     fclose(fv);	
+
+//     FILE *fc = fopen("components_data", "rb");
+//     int keyc;
+//     vector<int> valc;
+//     while(fread(&keyc, 8, 1, fc)){
+//         fread(&valc, 1, 1, fc);
+//         components[keyc] = valc;
+//     }
+//     fclose(fc);
+// }
+
 void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength, const planning_scene::PlanningScene* planning_scene) {
 	if (!mapGenerated) {
 		// pre-processing
@@ -456,6 +509,7 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
     int numOfDOFs = 6;
+	int numOfWaypoints = 10;
 	double qGoal[numOfDOFs] = {-120*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double qStart[numOfDOFs]  = {-60*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double **plan = 0;

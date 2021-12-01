@@ -11,19 +11,19 @@
 #include <queue>
 #include <stack>
 #include <iostream>
-
-
+#include <fstream>
 
 #define PI 3.141592654
+
+#define PARSE_ID 0
+#define PARSE_COMP_ID 0
+#define PARSE_ANGLES 0
+#define PARSE_NEIGHBORS 0
 
 using namespace std;
 
 // need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
 // will need to save data elsewhere in that case
-struct Node;
-static unordered_map<int, Node*> vertices;
-static unordered_map<int, vector<int>> components;
-static bool mapGenerated;
 static int numVertices = 0;
 static int maxNeighbors = 10;
 static int epsilon = 2;
@@ -49,6 +49,8 @@ struct Node {
 	double f;
 	double g;
 	Node *parent;
+
+	Node(){}
 
 	Node(int idIn, int compIdIn, double *anglesIn)
 	{
@@ -82,6 +84,47 @@ struct Node {
 		this->f = 0;
 		this->g = INT16_MAX;
 		this->parent = 0;
+	}
+
+	void writeData(ofstream &f, int numOfDOFs) {
+		f << id << endl;
+		f << compId << endl;
+
+		for (int i = 0; i < numOfDOFs; i++) {
+			f << angles[i] << " ";
+		}
+		f << endl;
+
+		for (int n : neighbors) {
+			f << n << " ";
+		}
+		f << endl << endl;
+	}
+
+	void readData(ifstream &f, string &line, int parser, unordered_map<int, Node*> &vertices, int numOfDOFs) {
+		if (parser == PARSE_ID) {
+			this->id = stoi(line);
+		} else if (parser == PARSE_COMP_ID) {
+			this->compId = stoi(line);
+		} else if (parser == PARSE_ANGLES) {
+			this->angles = (double *)malloc(numOfDOFs*sizeof(double));
+			int start = 0;
+			int spacePos;
+			for (int i = 0; i < numOfDOFs; i++) {
+				spacePos = line.find(" ");
+				this->angles[i] = stod(line.substr(start, spacePos));
+				start = spacePos + 1;
+			}
+		} else if (parser == PARSE_NEIGHBORS) {
+			int start = 0;
+			int spacePos;
+			while ((spacePos = line.find(" ")) != string::npos) {
+				this->neighbors.push_back(stod(line.substr(start, spacePos)));
+				start = spacePos + 1;
+			}
+		}
+		this->resetAstarParams();
+		vertices[this->id] = this;
 	}
 
 };
@@ -135,7 +178,8 @@ void update_component_ids(unordered_map<int, Node*> &vertices, unordered_map<int
 		vertices[id]->compId = newId;
 		components[newId].push_back(id);
 	}
-	components[oldId].clear();
+	components.erase(oldId);
+	// components[oldId].clear();
 }
 
 Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int maxNeighbors, int idx, double epsilon, int numOfDOFs, double *map, int xSize, int ySize)
@@ -191,18 +235,6 @@ void deletePointers(unordered_map<int, Node*> &vertices) {
 		a = q->angles;
 		delete q, a;
 	}
-}
-
-void printNumComponents(unordered_map<int, vector<int>> &components) {
-	int numComponents = 0;
-	for (auto& it : components)
-	{
-		if (!it.second.empty())
-		{
-			numComponents++;
-		}
-	}
-	cout << "num of components: " << numComponents << endl;
 }
 
 void clearOldData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
@@ -316,12 +348,50 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 	}
 }
 
-void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength) {
+void saveData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs) {
+	ofstream fv;
+	fv.open("vertices_datatest.txt", ios::out);
+    for(const auto& it : vertices){
+        it.second->writeData(fv, numOfDOFs);
+    }
+    fv.close();
+
+	// ofstream fc;
+	// fc.open("components_data.txt", ios::out);
+    // for(const auto& it : components){
+    //     fc << it.first << endl;
+    //     for (int n : it.second) {
+	// 		fc << n << " ";
+	// 	}
+	// 	fc << endl << endl;
+    // }
+    // fc.close();
+}
+
+void loadData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs) {
+
+    ifstream fv;
+	fv.open("vertices_data.txt", ios::in);
+    string line;
+	int parser = PARSE_ID;
+    Node* n = new Node();
+	if (fv.is_open()) {
+		while (getline(fv, line)) {
+			if (line.empty()) {
+				n = new Node();
+				parser = PARSE_ID;
+			}
+			n->readData(fv, line, parser++, vertices, numOfDOFs);
+		}
+	}
+    
+}
+
+void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, bool mapGenerated, int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength) {
 	if (!mapGenerated) {
 		// pre-processing
-		mapGenerated = true;
-		deletePointers(vertices);
-		clearOldData(vertices, components);
+		// deletePointers(vertices);
+		// clearOldData(vertices, components);
 
 		Node *q;
 		int tf = 5;
@@ -334,7 +404,11 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 			randomSample(s, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check inside randomSample
 			q = integrate_with_graph(s, vertices, components, maxNeighbors, numVertices++, epsilon, numOfDOFs, 0, 0, 0);   // need to add inputs necessary for collision check
 		}
-	}
+		saveData(vertices, components, numOfDOFs);
+	} 
+	// else {
+	// 	loadData(numOfDOFs);
+	// }
 
 	// query
 	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
@@ -342,7 +416,7 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 	numVertices++;
 
 	cout << "num of vertices: " << numVertices << endl;
-	printNumComponents(components);
+	cout << "num of components: " << components.size() << endl;
 
 	cout << "goal comp id: " << qGoal->compId << endl <<  "start comp id: " << qStart->compId << endl;
 
@@ -365,18 +439,28 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
 }
 
-int main() {
-	clock_t startTime = clock();
+int main(int argc, char const *argv[]) {
+	// clock_t startTime = clock();
+	unordered_map<int, Node*> vertices;
+	unordered_map<int, vector<int>> components;
     int numOfDOFs = 5;
-	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
-	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
-	double **plan = 0;
-	int planLength;
+	// double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
+	// double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
+	// double **plan = 0;
+	// int planLength;
+	// bool mapGenerated = false;
 
-	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength);
-	printPlan(plan, planLength, numOfDOFs);
+	// if (argc > 1) {
+	// 	mapGenerated = true;
+	// }
 
-	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
+	// plannerPRM(vertices, components, mapGenerated, numOfDOFs, qStart, qGoal, plan, planLength);
+	// printPlan(plan, planLength, numOfDOFs);
+
+	// cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
+
+	loadData(vertices, components, numOfDOFs);
+	saveData(vertices, components, numOfDOFs);
 
     return 0;
 }
