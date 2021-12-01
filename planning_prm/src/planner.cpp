@@ -116,10 +116,8 @@ struct Node {
 
 	void readData(ifstream &f, string &line, int parser, unordered_map<int, Node*> &vertices, int numOfDOFs) {
 		if (parser == PARSE_ID) {
-			// cout << "id: " << line << "." << endl;
 			this->id = stoi(line);
 		} else if (parser == PARSE_COMP_ID) {
-			// cout << "comdId: " << line << "." << endl;
 			this->compId = stoi(line);
 		} else if (parser == PARSE_ANGLES) {
 			this->angles = (double *)malloc(numOfDOFs*sizeof(double));
@@ -134,7 +132,6 @@ struct Node {
 			while ((spacePos = line.find(" ")) != string::npos) {
 				this->neighbors.push_back(stoi(line.substr(0, spacePos)));
 				line.erase(0, spacePos + 1);
-				// cout << "it\n";
 			}
 			// cout << this->toString(numOfDOFs);
 		}
@@ -231,16 +228,16 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 	return q;
 }
 
-void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
-{
-	for (int id : n->neighbors)
-	{
-		vertices[id]->neighbors.pop_back();
-	}
-	vertices.erase(n->id);
-	components[n->compId].pop_back();
-	delete n;
-}
+// void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
+// {
+// 	for (int id : n->neighbors)
+// 	{
+// 		vertices[id]->neighbors.pop_back();
+// 	}
+// 	vertices.erase(n->id);
+// 	components[n->compId].pop_back();
+// 	delete n;
+// }
 
 void deletePointers(unordered_map<int, Node*> &vertices) {
 	Node *q;
