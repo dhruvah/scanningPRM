@@ -526,7 +526,7 @@ int main(int argc, char **argv) {
 
 	// ......................PLANNER........................
 	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength, planning_scene);
-	delete planning_scene;
+	delete planning_scene; // DO NOT DELETE THIS LINE
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 	if (planLength < 2)
 	{

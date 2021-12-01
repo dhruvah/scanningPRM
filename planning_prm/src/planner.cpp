@@ -103,6 +103,7 @@ struct Node {
 
 	void readData(ifstream &f, string &line, int parser, unordered_map<int, Node*> &vertices, int numOfDOFs) {
 		if (parser == PARSE_ID) {
+			cout << "." << line << "." << endl;
 			this->id = stoi(line);
 		} else if (parser == PARSE_COMP_ID) {
 			this->compId = stoi(line);
