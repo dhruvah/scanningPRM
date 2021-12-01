@@ -43,26 +43,28 @@
 
 #define PI 3.141592654
 
+#define PARSE_ID 0
+#define PARSE_COMP_ID 1
+#define PARSE_ANGLES 2
+#define PARSE_NEIGHBORS 3
+
 using namespace std;
 
-// need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
-// will need to save data elsewhere in that case
-static int planTime = 5;
+// static int planTime = 5;
 static int K = 10000;
 
-struct Node;
-unordered_map<int, Node*> vertices;
-unordered_map<int, vector<int>> components;
-bool mapGenerated;
+const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
+const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
+const double numPlanningJoints = 5;
+
 int numVertices = 0;
 const int maxNeighbors = 20;
 const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
 const double i_step = PI/16;
-const string PLANNING_GROUP = "arm";
-const string PLANNING_GROUP2 = "turntable";
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
 {
+	const string PLANNING_GROUP = "arm";
 	vector<double> q_check;
 	for (int i = 0; i < numOfDOFs; i++) {
 		q_check.push_back(angles[i]);
@@ -84,6 +86,10 @@ double euclidDist(const double *v1, const double *v2, int numOfDOFs)
 	return sqrt(result);
 }
 
+double toRadians(int degrees) {
+	return (double)degrees*PI/180;
+}
+
 struct Node {
 	int id;
 	int compId;
@@ -93,12 +99,30 @@ struct Node {
 	double g;
 	Node *parent;
 
+	Node(){}
+
 	Node(int idIn, int compIdIn, double *anglesIn)
 	{
 		this->id = idIn;
 		this->compId = compIdIn;
 		this->angles = anglesIn;
 		this->g = INT16_MAX;
+	}
+
+	string toString(int numOfDOFs) {
+		string s = "id: " + to_string(id) + "\n";
+		s += "compId: " + to_string(compId) + "\n";
+		s += "angles: ";
+		for (int i = 0; i < numOfDOFs; i++) {
+			s += to_string(angles[i]) + ", ";
+		}
+		s = s.substr(0, s.length() - 2) + "\n";
+		s += "neighbors: ";
+		for (int n : neighbors) {
+			s += to_string(n) + ", ";
+		}
+		s = s.substr(0, s.length() - 2) + "\n";
+		return s;
 	}
 
 	void addEdge(Node *n)
@@ -127,22 +151,45 @@ struct Node {
 		this->parent = 0;
 	}
 
-	// void serialize(FILE* f, bool bWrite, int numOfDOFs) {
-	// 	this->resetAstarParams();
+	void writeData(ofstream &f, int numOfDOFs) {
+		f << id << endl;
+		f << compId << endl;
 
-	// 	if (bWrite) {
-	// 		fwrite(&id, sizeof(id), 1, f);
-	// 		fwrite(&compId, sizeof(compId), 1, f);
-	// 		fwrite(&angles[0], sizeof(double), numOfDOFs, f);
-	// 		fwrite(&neighbors[0], sizeof(int), neighbors.size(), f);
-	// 	}
-	// 	else {
-	// 		fread(&id, sizeof(id), 1, f);
-	// 		fread(&compId, sizeof(compId), 1, f);
-	// 		fread(&angles[0], sizeof(double), numOfDOFs, f);
-	// 		fread(&neighbors[0], sizeof(int), neighbors.size(), f);
-	// 	}
-	// }
+		for (int i = 0; i < numOfDOFs; i++) {
+			f << angles[i] << " ";
+		}
+		f << endl;
+
+		for (int n : neighbors) {
+			f << n << " ";
+		}
+		f << endl << endl;
+	}
+
+	void readData(ifstream &f, string &line, int parser, unordered_map<int, Node*> &vertices, int numOfDOFs) {
+		if (parser == PARSE_ID) {
+			this->id = stoi(line);
+		} else if (parser == PARSE_COMP_ID) {
+			this->compId = stoi(line);
+		} else if (parser == PARSE_ANGLES) {
+			this->angles = (double *)malloc(numOfDOFs*sizeof(double));
+			int spacePos;
+			for (int i = 0; i < numOfDOFs; i++) {
+				spacePos = line.find(" ");
+				this->angles[i] = stod(line.substr(0, spacePos));
+				line.erase(0, spacePos + 1);
+			}
+		} else if (parser == PARSE_NEIGHBORS) {
+			int spacePos;
+			while ((spacePos = line.find(" ")) != string::npos) {
+				this->neighbors.push_back(stoi(line.substr(0, spacePos)));
+				line.erase(0, spacePos + 1);
+			}
+			// cout << this->toString(numOfDOFs);
+		}
+		this->resetAstarParams();
+		vertices[this->id] = this;
+	}
 
 };
 
@@ -175,25 +222,14 @@ double constrainedRandomAngleGen(int i) {
 		srand(time(NULL));
 		init = true;
 	}
-	if (i == 0)
-	{
-		randAngle = -2.96706 + ((double)rand() / RAND_MAX)*(2.96706 - (-2.96706)); 
-	}
-	else if (i == 1)
-	{
-		randAngle = -1.745329 + ((double)rand() / RAND_MAX)*(2.356194 - (-1.745329)); 
-	}
-	else if (i == 2)
-	{
-		randAngle = -2.076942 + ((double)rand() / RAND_MAX)*(2.949606 - (-2.076942)); 
-	}
+	randAngle = jointMin[i] + ((double)rand() / RAND_MAX)*(jointMax[i] - jointMin[i]); 
 	return (randAngle);
 }
 
 void randomSample(double *angles, int numOfDOFs, const planning_scene::PlanningScene* planning_scene) {
 	for (int i = 0; i < numOfDOFs; i++)
 	{
-		if (i >= 3) {
+		if (i >= numPlanningJoints) {
 			angles[i] = 0;
 			continue;
 		}
@@ -222,7 +258,8 @@ void update_component_ids(unordered_map<int, Node*> &vertices, unordered_map<int
 		vertices[id]->compId = newId;
 		components[newId].push_back(id);
 	}
-	components[oldId].clear();
+	components.erase(oldId);
+	// components[oldId].clear();
 }
 
 bool obstacleFree(const double* q1, const double *q2, int numOfDOFs, const planning_scene::PlanningScene* planning_scene) {
@@ -243,7 +280,7 @@ bool obstacleFree(const double* q1, const double *q2, int numOfDOFs, const plann
 	return true;
 }
 
-Node* integrate_with_graph(	double *angles, int idx, int numOfDOFs, const planning_scene::PlanningScene* planning_scene)
+Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int idx, int numOfDOFs, const planning_scene::PlanningScene* planning_scene)
 {
 	Node *q = new Node(idx, idx, angles);
 	vertices[idx] = q;
@@ -277,16 +314,16 @@ Node* integrate_with_graph(	double *angles, int idx, int numOfDOFs, const planni
 	return q;
 }
 
-void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
-{
-	for (int id : n->neighbors)
-	{
-		vertices[id]->neighbors.pop_back();
-	}
-	vertices.erase(n->id);
-	components[n->compId].pop_back();
-	delete n;
-}
+// void removeFromGraph(Node *&n, unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
+// {
+// 	for (int id : n->neighbors)
+// 	{
+// 		vertices[id]->neighbors.pop_back();
+// 	}
+// 	vertices.erase(n->id);
+// 	components[n->compId].pop_back();
+// 	delete n;
+// }
 
 void deletePointers(unordered_map<int, Node*> &vertices) {
 	Node *q;
@@ -296,24 +333,6 @@ void deletePointers(unordered_map<int, Node*> &vertices) {
 		a = q->angles;
 		delete q, a;
 	}
-}
-
-void printNumComponents(unordered_map<int, vector<int>> &components) {
-	int numComponents = 0;
-	for (auto& it : components)
-	{
-		if (!it.second.empty())
-		{
-			numComponents++;
-		}
-	}
-	cout << "num of components: " << numComponents << endl;
-}
-
-void clearOldData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
-{
-	vertices.clear();
-	components.clear();
 }
 
 void resetNodeAstarParams(unordered_map<int, Node*> &vertices)
@@ -412,49 +431,78 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 	}
 }
 
-// void saveData(int numOfDOFs) {
-// 	FILE *fv = fopen("vertices_data", "wb");
-//     for(const auto& it : vertices){
-//         fwrite(&(it.first), sizeof(int), 1, fv);
-//         it.second->serialize(fv, true, numOfDOFs);
-//     }
-//     fclose(fv);
+void saveData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs) {
+	ofstream fv;
+	fv.open("ros_vertices_data.txt", ios::out);
+    for(const auto& it : vertices){
+        it.second->writeData(fv, numOfDOFs);
+    }
+    fv.close();
 
-// 	FILE *fc = fopen("components_data", "wb");
-//     for(const auto& it : components){
-//         fwrite(&(it.first), sizeof(int), 1, fc);
-//         fwrite(&(it.second)[0], sizeof(int), it.second.size(), fc);
-//     }
-//     fclose(fc);
-// }
+	// ofstream fc;
+	// fc.open("components_data.txt", ios::out);
+    // for(const auto& it : components){
+    //     fc << it.first << endl;
+    //     for (int n : it.second) {
+	// 		fc << n << " ";
+	// 	}
+	// 	fc << endl << endl;
+    // }
+    // fc.close();
+}
 
-// void loadData() {
-//     FILE *fv = fopen("vertices_data", "rb");
-//     int keyv;
-//     Node* valv;
-//     while(fread(&keyv, 8, 1, fv)){
-//         fread(&valv, 1, 1, fv);
-//         vertices[keyv] = valv;
-//     }
-//     fclose(fv);	
+void loadData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs) {
 
-//     FILE *fc = fopen("components_data", "rb");
-//     int keyc;
-//     vector<int> valc;
-//     while(fread(&keyc, 8, 1, fc)){
-//         fread(&valc, 1, 1, fc);
-//         components[keyc] = valc;
-//     }
-//     fclose(fc);
-// }
+    ifstream fv;
+	fv.open("ros_vertices_data.txt", ios::in);
+    string line;
+	int parser = PARSE_ID;
+    Node* n = new Node();
+	if (fv.is_open()) {
+		while (getline(fv, line)) {
+			// cout << "parser: " << parser << endl;
+			// cout << line << endl;
+			if (line.empty()) {
+				n = new Node();
+				parser = PARSE_ID;
+			} else {
+				n->readData(fv, line, parser++, vertices, numOfDOFs);
+			}
+		}
+	}
+	else {
+		cout << "could not open file\n";
+	}
+	fv.close();
 
-void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength, const planning_scene::PlanningScene* planning_scene) {
-	if (!mapGenerated) {
+	// ifstream fc;
+	// fc.open("components_data.txt", ios::in);
+	// if (fc.is_open()) {
+	// 	int spacePos;
+	// 	int nodeId;
+	// 	while (getline(fc, line)) {
+	// 		if (line.empty()) {
+	// 			continue;
+	// 		}
+	// 		if (spacePos = line.find(" ") == string::npos) {
+	// 			nodeId = stoi(line);
+	// 		} else {
+	// 			while ((spacePos = line.find(" ")) != string::npos) {
+	// 				components[nodeId].push_back(stoi(line.substr(0, spacePos)));
+	// 				line.erase(0, spacePos + 1);
+	// 			}				
+	// 		}
+	// 	}
+	// }
+	// else {
+	// 	cout << "could not open file\n";
+	// }
+	// fc.close();    
+}
+
+void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, bool prmBuild, int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength, const planning_scene::PlanningScene* planning_scene) {
+	if (prmBuild) {
 		// pre-processing
-		mapGenerated = true;
-		deletePointers(vertices);
-		clearOldData(vertices, components);
-
 		Node *q;
 		clock_t prmStartTime = clock();
 		// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < planTime)
@@ -462,17 +510,18 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 		{
 			double *s = new double[numOfDOFs];
 			randomSample(s, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check inside randomSample
-			q = integrate_with_graph(s, numVertices++, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check
+			q = integrate_with_graph(s, vertices, components, numVertices++, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check
 		}
+		saveData(vertices, components, numOfDOFs);
 	}
 
 	// query
-	Node *qGoal = integrate_with_graph(goalAngles, numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
-	Node *qStart = integrate_with_graph(startAngles, ++numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
+	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
+	Node *qStart = integrate_with_graph(startAngles, vertices, components, ++numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
 	numVertices++;
 
 	cout << "num of vertices: " << numVertices << endl;
-	printNumComponents(components);
+	cout << "num of components: " << components.size() << endl;
 
 	cout << "goal comp id: " << qGoal->compId << endl <<  "start comp id: " << qStart->compId << endl;
 
@@ -491,42 +540,49 @@ void plannerPRM(int numOfDOFs, double *startAngles, double *goalAngles, double *
 	}
 	cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
 
-	// cout << "Aaj" << endl;
-	removeFromGraph(qGoal, vertices, components);
-	// cout << "Gaand" << endl;
-	removeFromGraph(qStart, vertices, components);
-	// cout << "lag" << endl;
-	resetNodeAstarParams(vertices);
-	// cout << "rahii" << endl;
-	qGoal, qStart = nullptr;
-	// cout << "haiiii" << endl;
-	numVertices -= 2;
-
-	// deletePointers(vertices);  // double check this to make sure all pointers deleted
-	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
+	deletePointers(vertices);
 }
 
 
 int main(int argc, char **argv) {
 	clock_t startTime = clock();
+	unordered_map<int, Node*> vertices;
+	unordered_map<int, vector<int>> components;
     int numOfDOFs = 6;
 	int numOfWaypoints = 10;
 	double qGoal[numOfDOFs] = {-120*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double qStart[numOfDOFs]  = {-60*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
 	double **plan = 0;
 	int planLength = 0;
+	bool prmBuild = true;
+	// cout << "prmBuild: " << prmBuild << endl;
 
 	// ....................CREATE SCENE.....................
     ros::init(argc, argv, "talker");
-    ros::NodeHandle n;
+    ros::NodeHandle n("~");
+	string check;
+	n.getParam("param", check);
+	ROS_INFO("Got parameter: %s", check.c_str());
+
+	if (check.compare("loadmap") == 0) {
+		cout << "loading map...\n";
+		prmBuild = false;
+		clock_t build_time = clock();
+		loadData(vertices, components, numOfDOFs);
+		numVertices = vertices.size();
+		cout << "build runtime: " << (float)(clock() - build_time)/ CLOCKS_PER_SEC << endl;
+	}
+	else if(check.compare("buildmap") == 0) {
+		cout << "building map...\n";
+	}
 
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	const moveit::core::RobotModelPtr& kinematic_model = robot_model_loader.getModel();
 
 	planning_scene::PlanningScene* planning_scene = new planning_scene::PlanningScene(kinematic_model);
-	
+
 	// ......................PLANNER........................
-	plannerPRM(numOfDOFs, qStart, qGoal, plan, planLength, planning_scene);
+	plannerPRM(vertices, components, prmBuild, numOfDOFs, qStart, qGoal, plan, planLength, planning_scene);
 	delete planning_scene; // DO NOT DELETE THIS LINE
 	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 	if (planLength < 2)
@@ -552,6 +608,7 @@ int main(int argc, char **argv) {
 
 	// .....................COPY PLAN AND PUBLISH..............................
 	jt.points.resize(planLength);
+
 
 	vector<vector<double>> store_plan;
 	cout << "Publishing plan to Gazebo" << endl;
@@ -579,7 +636,6 @@ int main(int argc, char **argv) {
 	// }
 
 	jt_pub.publish(jt);
-	deletePointers(vertices);
 
     return 0;
 }
