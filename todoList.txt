@@ -1,9 +1,9 @@
 Demo Checklist
 
 Collision Checking
-    - ROS_INFO logging remove
-    - Limit random joint angles PRM
-    - Prebuild .txt file with valid configs
+    + ROS_INFO logging remove
+    + Limit random joint angles PRM
+    + Prebuild .txt file with valid configs
 
 Object
     - Create 1 Object
