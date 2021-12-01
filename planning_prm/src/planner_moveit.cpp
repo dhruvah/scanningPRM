@@ -52,7 +52,7 @@
 using namespace std;
 
 // static int planTime = 5;
-static int K = 30000;
+static int K = 50000;
 
 const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
 const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
@@ -60,7 +60,7 @@ const double numPlanningJoints = 5;
 
 int numVertices = 0;
 const int maxNeighbors = 20;
-const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
+const double epsilon = PI/5; //2 <<<<<<<<< parameter tuning
 const double i_step = PI/32;
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
@@ -619,9 +619,19 @@ int main(int argc, char **argv) {
 	int numOfWaypoints;
 	double **waypoints;
 
+	// ....................CREATE SCENE.....................
+    ros::init(argc, argv, "talker");
+    ros::NodeHandle n("~");
+	string check;
+	string textfile;
+	n.getParam("param", check);
+	n.getParam("file", textfile);
+	ROS_INFO("Got parameter: %s", check.c_str());
+	ROS_INFO("Got parameter: %s", textfile.c_str());
+
 	string line;
 	ifstream myfile;
-	myfile.open("waypt1.txt", ios::in);
+	myfile.open(textfile, ios::in);
 	if (myfile.is_open())
 	{
 		int spacePos;
@@ -648,27 +658,9 @@ int main(int argc, char **argv) {
 	}
 	printPlan(waypoints, numOfWaypoints, numOfDOFs);
 
-	// double q1[numOfDOFs] = {-120*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
-	// double q2[numOfDOFs]  = {-90*PI/180, 20*PI/180, 150*PI/180, 0, 0, 0};
-	// double q3[numOfDOFs]  = {-90*PI/180, 0*PI/180, 90*PI/180, 0, 0, 0};
-	// double q4[numOfDOFs]  = {-60*PI/180, 60*PI/180, 90*PI/180, 0, 0, 0};
-
-	// waypoints[0] = q1;
-	// waypoints[1] = q2;
-	// waypoints[2] = q3;
-	// waypoints[3] = q4;
-
 	double **plan = 0;
 	int planLength = 0;
 	bool isPrmBuild = true;
-	// cout << "isPrmBuild: " << isPrmBuild << endl;
-
-	// ....................CREATE SCENE.....................
-    ros::init(argc, argv, "talker");
-    ros::NodeHandle n("~");
-	string check;
-	n.getParam("param", check);
-	ROS_INFO("Got parameter: %s", check.c_str());
 
 	if (check.compare("loadmap") == 0) {
 		cout << "loading map...\n";
