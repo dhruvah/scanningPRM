@@ -16,19 +16,16 @@
 #define PI 3.141592654
 
 #define PARSE_ID 0
-#define PARSE_COMP_ID 0
-#define PARSE_ANGLES 0
-#define PARSE_NEIGHBORS 0
+#define PARSE_COMP_ID 1
+#define PARSE_ANGLES 2
+#define PARSE_NEIGHBORS 3
 
 using namespace std;
 
-// need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
-// will need to save data elsewhere in that case
-static int numVertices = 0;
-static int maxNeighbors = 10;
-static int epsilon = 2;
-static double i_step = 0.05;
-
+int numVertices = 0;
+const int maxNeighbors = 10;
+const int epsilon = 2;
+const double i_step = 0.05;
 
 double euclidDist(double *v1, double *v2, int numOfDOFs)
 {
@@ -58,6 +55,22 @@ struct Node {
 		this->compId = compIdIn;
 		this->angles = anglesIn;
 		this->g = INT16_MAX;
+	}
+
+	string toString(int numOfDOFs) {
+		string s = "id: " + to_string(id) + "\n";
+		s += "compId: " + to_string(compId) + "\n";
+		s += "angles: ";
+		for (int i = 0; i < numOfDOFs; i++) {
+			s += to_string(angles[i]) + ", ";
+		}
+		s = s.substr(0, s.length() - 2) + "\n";
+		s += "neighbors: ";
+		for (int n : neighbors) {
+			s += to_string(n) + ", ";
+		}
+		s = s.substr(0, s.length() - 2) + "\n";
+		return s;
 	}
 
 	void addEdge(Node *n)
@@ -103,26 +116,27 @@ struct Node {
 
 	void readData(ifstream &f, string &line, int parser, unordered_map<int, Node*> &vertices, int numOfDOFs) {
 		if (parser == PARSE_ID) {
-			cout << "." << line << "." << endl;
+			// cout << "id: " << line << "." << endl;
 			this->id = stoi(line);
 		} else if (parser == PARSE_COMP_ID) {
+			// cout << "comdId: " << line << "." << endl;
 			this->compId = stoi(line);
 		} else if (parser == PARSE_ANGLES) {
 			this->angles = (double *)malloc(numOfDOFs*sizeof(double));
-			int start = 0;
 			int spacePos;
 			for (int i = 0; i < numOfDOFs; i++) {
 				spacePos = line.find(" ");
-				this->angles[i] = stod(line.substr(start, spacePos));
-				start = spacePos + 1;
+				this->angles[i] = stod(line.substr(0, spacePos));
+				line.erase(0, spacePos + 1);
 			}
 		} else if (parser == PARSE_NEIGHBORS) {
-			int start = 0;
 			int spacePos;
 			while ((spacePos = line.find(" ")) != string::npos) {
-				this->neighbors.push_back(stod(line.substr(start, spacePos)));
-				start = spacePos + 1;
+				this->neighbors.push_back(stoi(line.substr(0, spacePos)));
+				line.erase(0, spacePos + 1);
+				// cout << "it\n";
 			}
+			// cout << this->toString(numOfDOFs);
 		}
 		this->resetAstarParams();
 		vertices[this->id] = this;
@@ -238,12 +252,6 @@ void deletePointers(unordered_map<int, Node*> &vertices) {
 	}
 }
 
-void clearOldData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components)
-{
-	vertices.clear();
-	components.clear();
-}
-
 void resetNodeAstarParams(unordered_map<int, Node*> &vertices)
 {
 	for (auto &it : vertices)
@@ -351,7 +359,7 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 
 void saveData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs) {
 	ofstream fv;
-	fv.open("vertices_datatest.txt", ios::out);
+	fv.open("vertices_data.txt", ios::out);
     for(const auto& it : vertices){
         it.second->writeData(fv, numOfDOFs);
     }
@@ -378,22 +386,49 @@ void loadData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int
     Node* n = new Node();
 	if (fv.is_open()) {
 		while (getline(fv, line)) {
+			// cout << "parser: " << parser << endl;
+			// cout << line << endl;
 			if (line.empty()) {
 				n = new Node();
 				parser = PARSE_ID;
+			} else {
+				n->readData(fv, line, parser++, vertices, numOfDOFs);
 			}
-			n->readData(fv, line, parser++, vertices, numOfDOFs);
 		}
 	}
-    
+	else {
+		cout << "could not open file\n";
+	}
+	fv.close();
+
+	// ifstream fc;
+	// fc.open("components_data.txt", ios::in);
+	// if (fc.is_open()) {
+	// 	int spacePos;
+	// 	int nodeId;
+	// 	while (getline(fc, line)) {
+	// 		if (line.empty()) {
+	// 			continue;
+	// 		}
+	// 		if (spacePos = line.find(" ") == string::npos) {
+	// 			nodeId = stoi(line);
+	// 		} else {
+	// 			while ((spacePos = line.find(" ")) != string::npos) {
+	// 				components[nodeId].push_back(stoi(line.substr(0, spacePos)));
+	// 				line.erase(0, spacePos + 1);
+	// 			}				
+	// 		}
+	// 	}
+	// }
+	// else {
+	// 	cout << "could not open file\n";
+	// }
+	// fc.close();    
 }
 
-void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, bool mapGenerated, int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength) {
-	if (!mapGenerated) {
+void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, bool prmBuild, int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength) {
+	if (prmBuild) {
 		// pre-processing
-		// deletePointers(vertices);
-		// clearOldData(vertices, components);
-
 		Node *q;
 		int tf = 5;
 		int K = 20000;
@@ -407,9 +442,6 @@ void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<i
 		}
 		saveData(vertices, components, numOfDOFs);
 	} 
-	// else {
-	// 	loadData(numOfDOFs);
-	// }
 
 	// query
 	Node *qGoal = integrate_with_graph(goalAngles, vertices, components, maxNeighbors, numVertices, epsilon, numOfDOFs, 0, 0, 0);  // need to add inputs necessary for collision check
@@ -430,38 +462,35 @@ void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<i
 		cout << "no viable path exists\n";
 	}
 
-	removeFromGraph(qGoal, vertices, components);
-	removeFromGraph(qStart, vertices, components);
-	resetNodeAstarParams(vertices);
-	qGoal, qStart = nullptr;
-	numVertices -= 2;
-
-	// deletePointers(vertices);  // double check this to make sure all pointers deleted
-	// when should pointers be deleted? will need to keep them for accessing map on successive query executions
+	deletePointers(vertices);
 }
 
 int main(int argc, char const *argv[]) {
-	// clock_t startTime = clock();
+	clock_t startTime = clock();
 	unordered_map<int, Node*> vertices;
 	unordered_map<int, vector<int>> components;
     int numOfDOFs = 5;
-	// double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
-	// double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
-	// double **plan = 0;
-	// int planLength;
-	// bool mapGenerated = false;
+	double qStart[numOfDOFs] = {PI/2, PI/4, 0, -PI/4, 0};
+	double qGoal[numOfDOFs]  = {PI/4, 0, PI/2, 0, -PI/4};
+	double **plan = 0;
+	int planLength;
+	bool prmBuild = true;
 
-	// if (argc > 1) {
-	// 	mapGenerated = true;
-	// }
+	if (argc > 1) {
+		clock_t build_time = clock();
+		loadData(vertices, components, numOfDOFs);
+		numVertices = vertices.size();
+		prmBuild = false;
+		cout << "build runtime: " << (float)(clock() - build_time)/ CLOCKS_PER_SEC << endl;
+	}
 
-	// plannerPRM(vertices, components, mapGenerated, numOfDOFs, qStart, qGoal, plan, planLength);
-	// printPlan(plan, planLength, numOfDOFs);
+	plannerPRM(vertices, components, prmBuild, numOfDOFs, qStart, qGoal, plan, planLength);
+	printPlan(plan, planLength, numOfDOFs);
 
-	// cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
+	// loadData(vertices, components, numOfDOFs);
+	// saveData(vertices, components, numOfDOFs);
 
-	loadData(vertices, components, numOfDOFs);
-	saveData(vertices, components, numOfDOFs);
+	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 
     return 0;
 }
