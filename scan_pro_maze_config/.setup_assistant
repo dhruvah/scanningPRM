@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: planning_prm
+    relative_path: urdf/scan_pro_robot_maze.urdf.xacro
+    xacro_args: ""
+  SRDF:
+    relative_path: config/scan_pro_robot.srdf
+  CONFIG:
+    author_name: Harsh Dhruva
+    author_email: hdhruva@andrew.cmu.edu
+    generated_timestamp: 1638353410

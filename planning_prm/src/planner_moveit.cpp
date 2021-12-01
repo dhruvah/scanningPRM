@@ -56,10 +56,11 @@ static int K = 50000;
 
 const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
 const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
-const double numPlanningJoints = 5;
+const double numPlanningJoints = 3;
 
 int numVertices = 0;
 const int maxNeighbors = 20;
+
 const double epsilon = PI/5; //2 <<<<<<<<< parameter tuning
 const double i_step = PI/32;
 
