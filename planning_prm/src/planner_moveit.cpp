@@ -56,12 +56,12 @@ static int K = 15000;
 
 const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
 const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
-const double numPlanningJoints = 5;
+const double numPlanningJoints = 3;
 
 int numVertices = 0;
 const int maxNeighbors = 20;
-const double epsilon = PI/8; //2 <<<<<<<<< parameter tuning
-const double i_step = PI/32;
+const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
+const double i_step = PI/64;
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
 {
@@ -590,6 +590,9 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 			}
 
 			globalPlanLength += localPlanLength;
+			localPlanLength = 0;
+			localPlanLength = 0;
+			resetNodeAstarParams(vertices);
 		}
 		else
 		{
@@ -611,7 +614,7 @@ int main(int argc, char **argv) {
 
 	string line;
 	ifstream myfile;
-	myfile.open("waypt2.txt", ios::in);
+	myfile.open("waypt5.txt", ios::in);
 	if (myfile.is_open())
 	{
 		int spacePos;
