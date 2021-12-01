@@ -50,10 +50,12 @@
 
 using namespace std;
 
-// need to figure out exactly how this is going to work with ROS- compiling executable and running seperate times wont work,
-// will need to save data elsewhere in that case
-static int planTime = 5;
+// static int planTime = 5;
 static int K = 10000;
+
+const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
+const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
+const double numPlanningJoints = 5;
 
 int numVertices = 0;
 const int maxNeighbors = 20;
@@ -82,6 +84,10 @@ double euclidDist(const double *v1, const double *v2, int numOfDOFs)
 		result += (v1[i] - v2[i])*(v1[i] - v2[i]);
 	}
 	return sqrt(result);
+}
+
+double toRadians(int degrees) {
+	return (double)degrees*PI/180;
 }
 
 struct Node {
@@ -216,25 +222,14 @@ double constrainedRandomAngleGen(int i) {
 		srand(time(NULL));
 		init = true;
 	}
-	if (i == 0)
-	{
-		randAngle = -2.96706 + ((double)rand() / RAND_MAX)*(2.96706 - (-2.96706)); 
-	}
-	else if (i == 1)
-	{
-		randAngle = -1.745329 + ((double)rand() / RAND_MAX)*(2.356194 - (-1.745329)); 
-	}
-	else if (i == 2)
-	{
-		randAngle = -2.076942 + ((double)rand() / RAND_MAX)*(2.949606 - (-2.076942)); 
-	}
+	randAngle = jointMin[i] + ((double)rand() / RAND_MAX)*(jointMax[i] - jointMin[i]); 
 	return (randAngle);
 }
 
 void randomSample(double *angles, int numOfDOFs, const planning_scene::PlanningScene* planning_scene) {
 	for (int i = 0; i < numOfDOFs; i++)
 	{
-		if (i >= 3) {
+		if (i >= numPlanningJoints) {
 			angles[i] = 0;
 			continue;
 		}
@@ -570,7 +565,7 @@ int main(int argc, char **argv) {
 	ROS_INFO("Got parameter: %s", check.c_str());
 
 	if (check.compare("loadmap") == 0) {
-		cout << "building map...\n";
+		cout << "loading map...\n";
 		prmBuild = false;
 		clock_t build_time = clock();
 		loadData(vertices, components, numOfDOFs);
