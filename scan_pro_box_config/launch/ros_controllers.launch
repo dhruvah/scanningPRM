@@ -11,6 +11,9 @@
     ns="/scan_pro_robot" output="screen" 
     args="--namespace=/scan_pro_robot
     joint_state_controller
-    arm_controller"/>
+    arm_controller
+    turntable_controller"/>
+
+
 
 </launch>

@@ -35,11 +35,11 @@ scan_pro_robot:
   turntable_controller:
     type: position_controllers/JointTrajectoryController
     joints:
-      turntable_revolve_joint
+      - turntable_revolve_joint
 
-joint_state_controller:
-  type: joint_state_controller/JointStateController
-  publish_rate: 50
+# joint_state_controller:
+#   type: joint_state_controller/JointStateController
+#   publish_rate: 50
 controller_list:
   - name: scan_pro_robot/arm_controller
     action_ns: follow_joint_trajectory
@@ -57,4 +57,4 @@ controller_list:
     default: True
     type: FollowJointTrajectory
     joints:
-      turntable_revolve_joint
+      - turntable_revolve_joint

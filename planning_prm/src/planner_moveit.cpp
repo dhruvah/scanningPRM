@@ -59,6 +59,7 @@ const int maxNeighbors = 20;
 const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
 const double i_step = PI/16;
 const string PLANNING_GROUP = "arm";
+const string PLANNING_GROUP2 = "turntable";
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
 {
