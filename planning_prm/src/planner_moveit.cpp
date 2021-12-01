@@ -610,6 +610,7 @@ int main(int argc, char **argv) {
 	// .....................COPY PLAN AND PUBLISH..............................
 	jt.points.resize(planLength);
 
+
 	vector<vector<double>> store_plan;
 	cout << "Publishing plan to Gazebo" << endl;
 	while (i < planLength)
