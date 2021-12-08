@@ -555,14 +555,14 @@ void buildPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int
 		saveData(vertices, components, numOfDOFs);
 	}
 
-	cout << "num of vertices: " << numVertices << endl;
-	cout << "num of components: " << components.size() << endl;
+	// cout << "num of vertices: " << numVertices << endl;
+	// cout << "num of components: " << components.size() << endl;
 
-	int sum = 0;
-	for (const auto& it:vertices) {
-		sum += it.second->neighbors.size();
-	}
-	cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
+	// int sum = 0;
+	// for (const auto& it:vertices) {
+	// 	sum += it.second->neighbors.size();
+	// }
+	// cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
 }
 
 void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs, double **waypoints, int numOfWaypoints, double **&globalPlan, int &globalPlanLength, const planning_scene::PlanningScene* planning_scene) {
@@ -608,6 +608,14 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 			break;
 		}
 	}
+	cout << "num of vertices: " << numVertices << endl;
+	cout << "num of components: " << components.size() << endl;
+	
+	int sum = 0;
+	for (const auto& it:vertices) {
+		sum += it.second->neighbors.size();
+	}
+	cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
 
 	deletePointers(vertices);
 }
