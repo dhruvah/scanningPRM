@@ -52,14 +52,14 @@
 using namespace std;
 
 // static int planTime = 5;
-static int K = 50000;
+static int K = 10000;
 
 const double jointMin[] = {-170*PI/180, -100*PI/180, -119*PI/180, -190*PI/180, -120*PI/180};
 const double jointMax[] = {170*PI/180, 135*PI/180, 169*PI/180, 190*PI/180, 120*PI/180};
-const double numPlanningJoints = 3;
+const double numPlanningJoints = 5;
 
 int numVertices = 0;
-const int maxNeighbors = 20;
+const int maxNeighbors = 30;
 const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
 const double i_step = PI/64;
 
@@ -182,7 +182,6 @@ struct Node {
 				this->neighbors.push_back(stoi(line.substr(0, spacePos)));
 				line.erase(0, spacePos + 1);
 			}
-			// cout << this->toString(numOfDOFs);
 		}
 		this->resetAstarParams();
 		vertices[this->id] = this;
@@ -231,7 +230,7 @@ void randomSample(double *angles, int numOfDOFs, const planning_scene::PlanningS
 		}
 		angles[i] = constrainedRandomAngleGen(i);
 	}
-	if (is_valid_K(planning_scene, angles, numOfDOFs)) // need to change this to collision check, use fcl library
+	if (is_valid_K(planning_scene, angles, numOfDOFs))
 	{
 		return;
 	}
@@ -255,7 +254,6 @@ void update_component_ids(unordered_map<int, Node*> &vertices, unordered_map<int
 		components[newId].push_back(id);
 	}
 	components.erase(oldId);
-	// components[oldId].clear();
 }
 
 bool obstacleFree(const double* q1, const double *q2, int numOfDOFs, const planning_scene::PlanningScene* planning_scene) {
@@ -269,7 +267,6 @@ bool obstacleFree(const double* q1, const double *q2, int numOfDOFs, const plann
 			temp[i] = q1[i] + (q2[i] - q1[i]) * ((double)step / (double)numSteps);
 		}
 		if (!is_valid_K(planning_scene, temp, numOfDOFs)) {
-			// cout << "collision\n";
 			return false;
 		}
 	}
@@ -295,7 +292,7 @@ Node* integrate_with_graph(double *angles, unordered_map<int, Node*> &vertices, 
 		{
 			if (q->neighbors.size() < maxNeighbors)  // could also be (q->comp_id != it.second->comp_id) if only connecting components once (this was a problem before though)
 			{
-				if (obstacleFree(it.second->angles, angles, numOfDOFs, planning_scene))	// need to implement obstacleFree function here (interpolate and check for collisions between configs)
+				if (obstacleFree(it.second->angles, angles, numOfDOFs, planning_scene))
 				{
 					newId = it.second->compId;
 					q->addEdge(it.second);
@@ -352,7 +349,7 @@ void printPlan(double **&plan, int planLength, int numOfDOFs) {
 
 void backtrackPRM(Node *goal, int numOfDOFs, double **&plan, int &planLength)
 {
-	cout << "Plan euclidean distance: " << goal->g << endl;
+	// cout << "Plan euclidean distance: " << goal->g << endl;
 	Node *temp = goal;
 	int numSteps;
 	stack<double*> path;
@@ -372,9 +369,9 @@ void backtrackPRM(Node *goal, int numOfDOFs, double **&plan, int &planLength)
 	}
 }
 
-void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, int numOfDOFs, double **&plan, int &planLength)
+double aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, int numOfDOFs, double **&plan, int &planLength)
 {
-	cout << "finding optimal path...\n";
+	// cout << "finding optimal path...\n";
 	priority_queue<Node *, vector<Node *>, NodeCompare> OPEN;
     unordered_set<int> CLOSED;
 	OPEN.push(start);
@@ -417,9 +414,9 @@ void aStarSearch(unordered_map<int, Node*> &vertices, Node *start, Node *goal, i
 	}
 	if (goalFound)
 	{
-		cout << "Goal found. Now Backtracking\n";
 		backtrackPRM(best, numOfDOFs, plan, planLength);
-		cout << "Path found" << endl;
+		// cout << "Path found" << endl;
+		return best->g;
 	}
 	else
 	{
@@ -434,17 +431,6 @@ void saveData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int
         it.second->writeData(fv, numOfDOFs);
     }
     fv.close();
-
-	// ofstream fc;
-	// fc.open("components_data.txt", ios::out);
-    // for(const auto& it : components){
-    //     fc << it.first << endl;
-    //     for (int n : it.second) {
-	// 		fc << n << " ";
-	// 	}
-	// 	fc << endl << endl;
-    // }
-    // fc.close();
 }
 
 void loadData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs) {
@@ -456,8 +442,6 @@ void loadData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int
     Node* n = new Node();
 	if (fv.is_open()) {
 		while (getline(fv, line)) {
-			// cout << "parser: " << parser << endl;
-			// cout << line << endl;
 			if (line.empty()) {
 				n = new Node();
 				parser = PARSE_ID;
@@ -469,123 +453,45 @@ void loadData(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int
 	else {
 		cout << "could not open file\n";
 	}
-	fv.close();
-
-	// ifstream fc;
-	// fc.open("components_data.txt", ios::in);
-	// if (fc.is_open()) {
-	// 	int spacePos;
-	// 	int nodeId;
-	// 	while (getline(fc, line)) {
-	// 		if (line.empty()) {
-	// 			continue;
-	// 		}
-	// 		if (spacePos = line.find(" ") == string::npos) {
-	// 			nodeId = stoi(line);
-	// 		} else {
-	// 			while ((spacePos = line.find(" ")) != string::npos) {
-	// 				components[nodeId].push_back(stoi(line.substr(0, spacePos)));
-	// 				line.erase(0, spacePos + 1);
-	// 			}				
-	// 		}
-	// 	}
-	// }
-	// else {
-	// 	cout << "could not open file\n";
-	// }
-	// fc.close();    
-}
-
-void plannerPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, bool isPrmBuild, int numOfDOFs, double *startAngles, double *goalAngles, double **&plan, int &planLength, const planning_scene::PlanningScene* planning_scene) {
-	// if (isPrmBuild) {
-	// 	// pre-processing
-	// 	Node *q;
-	// 	clock_t prmStartTime = clock();
-	// 	// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < planTime)
-	// 	for (int k = 0; k < K; k++)
-	// 	{
-	// 		double *s = new double[numOfDOFs];
-	// 		randomSample(s, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check inside randomSample
-	// 		q = integrate_with_graph(s, vertices, components, numVertices++, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check
-	// 	}
-	// 	saveData(vertices, components, numOfDOFs);
-	// }
-
-	// // query
-	// Node *qGoal = integrate_with_graph(goalAngles, vertices, components, numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
-	// Node *qStart = integrate_with_graph(startAngles, vertices, components, ++numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
-	// numVertices++;
-
-	// cout << "num of vertices: " << numVertices << endl;
-	// cout << "num of components: " << components.size() << endl;
-
-	// cout << "goal comp id: " << qGoal->compId << endl <<  "start comp id: " << qStart->compId << endl;
-
-	// if (qGoal->compId == qStart->compId)
-	// {
-	// 	aStarSearch(vertices, qStart, qGoal, numOfDOFs, plan, planLength);
-	// }
-	// else
-	// {
-	// 	cout << "no viable path exists\n";
-	// }
-
-	// int sum = 0;
-	// for (const auto& it:vertices) {
-	// 	sum += it.second->neighbors.size();
-	// }
-	// cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
-
-	// deletePointers(vertices);
+	fv.close();   
 }
 
 void buildPRM(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs, const planning_scene::PlanningScene* planning_scene, bool save) {
 	// pre-processing
 	Node *q;
 	clock_t prmStartTime = clock();
-	// while (((double)(clock() - prmStartTime) / CLOCKS_PER_SEC) < planTime)
 	for (int k = 0; k < K; k++)
 	{
 		double *s = new double[numOfDOFs];
-		randomSample(s, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check inside randomSample
-		q = integrate_with_graph(s, vertices, components, numVertices++, numOfDOFs, planning_scene);   // need to add inputs necessary for collision check
+		randomSample(s, numOfDOFs, planning_scene);
+		q = integrate_with_graph(s, vertices, components, numVertices++, numOfDOFs, planning_scene);
 	}
 	if (save) {
 		saveData(vertices, components, numOfDOFs);
 	}
-
-	// cout << "num of vertices: " << numVertices << endl;
-	// cout << "num of components: " << components.size() << endl;
-
-	// int sum = 0;
-	// for (const auto& it:vertices) {
-	// 	sum += it.second->neighbors.size();
-	// }
-	// cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
 }
 
-void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs, double **waypoints, int numOfWaypoints, double **&globalPlan, int &globalPlanLength, const planning_scene::PlanningScene* planning_scene) {
+double waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vector<int>> &components, int numOfDOFs, double **waypoints, int numOfWaypoints, double **&globalPlan, int &globalPlanLength, const planning_scene::PlanningScene* planning_scene) {
 	// query
 	double *goalAngles;
 	double *startAngles;
+	double totalEuclidDist = 0;
 	for (int i = 0; i < numOfWaypoints - 1; i++) {
 		startAngles = waypoints[i];
 		goalAngles = waypoints[i+1];
-		Node *qGoal = integrate_with_graph(goalAngles, vertices, components, numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
-		Node *qStart = integrate_with_graph(startAngles, vertices, components, ++numVertices, numOfDOFs, planning_scene);  // need to add inputs necessary for collision check
+		Node *qGoal = integrate_with_graph(goalAngles, vertices, components, numVertices, numOfDOFs, planning_scene);
+		Node *qStart = integrate_with_graph(startAngles, vertices, components, ++numVertices, numOfDOFs, planning_scene);
 		numVertices++;
 
-		cout << "goal comp id: " << qGoal->compId << endl <<  "start comp id: " << qStart->compId << endl;
+		// cout << "goal comp id: " << qGoal->compId << endl <<  "start comp id: " << qStart->compId << endl;
 
 		double **localPlan = 0;
 		int localPlanLength = 0;
-
 		if (qGoal->compId == qStart->compId)
 		{
-			printAngles(qStart->angles, numOfDOFs);
-			printAngles(qGoal->angles, numOfDOFs);
-			aStarSearch(vertices, qStart, qGoal, numOfDOFs, localPlan, localPlanLength);
-			// printPlan(localPlan, localPlanLength, numOfDOFs);
+			// printAngles(qStart->angles, numOfDOFs);
+			// printAngles(qGoal->angles, numOfDOFs);
+			totalEuclidDist += aStarSearch(vertices, qStart, qGoal, numOfDOFs, localPlan, localPlanLength);
 			globalPlan = (double**)realloc(globalPlan, (globalPlanLength+localPlanLength)*sizeof(double**));
 			for (int j = 0; j < localPlanLength; j++) {
 				globalPlan[globalPlanLength + j] = (double*)malloc(numOfDOFs*sizeof(double*));
@@ -599,7 +505,8 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 		}
 		else
 		{
-			cout << "found incomplete path\n";
+			cout << "***start and goal in different connected components\n";
+			cout << "***FAIL***\n";
 			break;
 		}
 	}
@@ -613,10 +520,10 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 	cout << "avg # of neighbors: " << (double)sum/numVertices << endl;
 
 	deletePointers(vertices);
+	return totalEuclidDist;
 }
 
 int main(int argc, char **argv) {
-	clock_t startTime = clock();
 	unordered_map<int, Node*> vertices;
 	unordered_map<int, vector<int>> components;
     int numOfDOFs = 6;
@@ -669,10 +576,10 @@ int main(int argc, char **argv) {
 	if (check.compare("loadmap") == 0) {
 		cout << "loading map...\n";
 		isPrmBuild = false;
-		clock_t build_time = clock();
+		clock_t load_time = clock();
 		loadData(vertices, components, numOfDOFs);
+		cout << "load runtime: " << (float)(clock() - load_time)/ CLOCKS_PER_SEC << endl;
 		numVertices = vertices.size();
-		cout << "build runtime: " << (float)(clock() - build_time)/ CLOCKS_PER_SEC << endl;
 	}
 	else if(check.compare("buildmap") == 0) {
 		cout << "building map...\n";
@@ -684,26 +591,28 @@ int main(int argc, char **argv) {
 	planning_scene::PlanningScene* planning_scene = new planning_scene::PlanningScene(kinematic_model);
 
 	// ......................PLANNER........................
-	// plannerPRM(vertices, components, isPrmBuild, numOfDOFs, qStart, qGoal, plan, planLength, planning_scene);
 	if (isPrmBuild) {
+		clock_t build_time = clock();
 		buildPRM(vertices, components, numOfDOFs, planning_scene, true);
+		cout << "build runtime: " << (float)(clock() - build_time)/ CLOCKS_PER_SEC << endl;
 	}
-	waypointsPath(vertices, components, numOfDOFs, waypoints, numOfWaypoints, plan, planLength, planning_scene);
+	clock_t astarStartTime = clock();
+	double totalDist = waypointsPath(vertices, components, numOfDOFs, waypoints, numOfWaypoints, plan, planLength, planning_scene);
+	cout << "A* query runtime: " << (float)(clock() - astarStartTime)/ CLOCKS_PER_SEC << endl;
+	cout << "Total euclidean distance traveled: " << totalDist / PI << " pi" << endl;
 	delete planning_scene; // DO NOT DELETE THIS LINE
-	cout << "Runtime: " << (float)(clock() - startTime)/ CLOCKS_PER_SEC << endl;
 	if (planLength < 2)
 	{
 		cout << "Exiting..." << endl;
 		return 0;
 	}
-	cout << "Should output plan details " << endl;
+	cout << "Plan:" << endl;
 	printPlan(plan, planLength, numOfDOFs);
 
 	trajectory_msgs::JointTrajectory jt;
 
 	int i = 0,j = 0;
 	double dt = 0.01;
-	// ros::Duration time;
 
 	ros::Publisher jt_pub = n.advertise<trajectory_msgs::JointTrajectory>("/scan_pro_robot/arm_controller/command", 100);
 	ros::Duration(1,0).sleep();
@@ -721,11 +630,8 @@ int main(int argc, char **argv) {
 	while (i < planLength)
 	{
 		vector<double> q_plan;
-		// // cout << "Here!" << endl;	
-		// cout << "ros plan check: " << plan[0] << endl;
 		for (int j = 0; j < numOfDOFs; j++)
 		{
-			// cout << plan[i][j] << endl;
 			q_plan.push_back(plan[i][j]);
 		}
 		store_plan.push_back(q_plan);
@@ -734,12 +640,7 @@ int main(int argc, char **argv) {
 		jt.points[i].time_from_start = ros::Duration(i + 2);
 		
 		i++;
-		// cout << "There!" << endl;
 	}
-
-	// for (trajectory_msgs::JointTrajectoryPoint p : jt.points) {
-	// 	cout << "time: " << p.time_from_start << endl;
-	// }
 
 	jt_pub.publish(jt);
 
