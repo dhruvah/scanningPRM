@@ -60,9 +60,8 @@ const double numPlanningJoints = 3;
 
 int numVertices = 0;
 const int maxNeighbors = 20;
-
-const double epsilon = PI/5; //2 <<<<<<<<< parameter tuning
-const double i_step = PI/32;
+const double epsilon = PI/4; //2 <<<<<<<<< parameter tuning
+const double i_step = PI/64;
 
 bool is_valid_K(const planning_scene::PlanningScene* planning_scene, double* angles, int numOfDOFs)
 {
@@ -594,12 +593,8 @@ void waypointsPath(unordered_map<int, Node*> &vertices, unordered_map<int, vecto
 			}
 
 			globalPlanLength += localPlanLength;
-			localPlan = 0;
 			localPlanLength = 0;
-			// removeFromGraph(qGoal, vertices, components);
-			// removeFromGraph(qStart, vertices, components);
-			// qGoal = nullptr, qStart = nullptr;
-			// numVertices -= 2;
+			localPlanLength = 0;
 			resetNodeAstarParams(vertices);
 		}
 		else
