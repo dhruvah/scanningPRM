@@ -4,6 +4,9 @@
 Instructions to run the code:
 
 Clone the repo into the \src folder of your catkin_ws
+
+Add the waypoint1.txt file in the \src folder besides \scanningPRM folder
+
 Go to the folder of your workspace where you can see \src folder and run:
 ```
   catkin build
